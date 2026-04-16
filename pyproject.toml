@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.4.4",
+    "torch>=2.11.0",
 ]
 
 [project.scripts]
@@ -17,3 +18,8 @@ nanotorch = "nanotorch:main"
 [build-system]
 requires = ["uv_build>=0.9.16,<0.10.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+]
