@@ -1,1 +1,0 @@
-- [nanotorch educational scope](project_nanotorch_scope.md) — from-scratch torch clone; numpy/torch forbidden as impl deps (OK in tests TBC)

@@ -77,3 +77,18 @@ def test_tensor_init_cast():
     x = nt.Tensor([0.0, 1.0, 2.0, 3.0], dtype=nt.DataType.INT32)
     assert x.dtype == nt.DataType.INT32
     assert x.shape == (4,)
+
+
+def test_tensor_sum_0d():
+    x = nt.Tensor(2.0)
+    assert x.sum() == 2.0
+
+
+def test_tensor_sum_1d():
+    x = nt.Tensor([1.0, 2.0, 3.0])
+    assert x.sum() == 6.0
+
+
+def test_tensor_sum_2d():
+    x = nt.Tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    assert x.sum() == 21.0

@@ -3,6 +3,8 @@
 from array import array
 from enum import Enum, auto
 
+from nanotorch import _C  # type: ignore
+
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
 
@@ -59,17 +61,22 @@ class Tensor:
     def shape(self) -> TensorShape:
         return self._shape
 
+    def sum(self) -> float:
+        return _C.sum(self._data)
+
 
 def _extract_tensor_data(
     data: InputType, user_dtype: DataType | None = None
 ) -> tuple[DataType, TensorShape, array]:
     """Automatically extract tensor information."""
 
+    # Accumulators
     shape: list[int] = []
     flat: list[float | int | bool] = []
     auto_dtype: DataType | None = None
 
     def rec(data: InputType, depth: int) -> None:
+        # Recursive walk through the data
         nonlocal auto_dtype
 
         if depth > MAX_TENSOR_DEPTH:
@@ -91,6 +98,7 @@ def _extract_tensor_data(
 
     rec(data, 0)
 
+    # Shape validation
     if len(shape) > 1:
         nrows = shape[0]
         if nrows + 1 != len(shape):
@@ -101,6 +109,7 @@ def _extract_tensor_data(
             raise ValueError("Incompatible shape: unhomogeneous rows length.")
         shape = shape[:2]
 
+    # Final type casting
     if auto_dtype is None:
         auto_dtype = DataType.FP32
     if user_dtype is not None:
@@ -112,7 +121,7 @@ def _extract_tensor_data(
         case DataType.BOOL:
             dtype_code = "b"
         case DataType.INT32:
-            dtype_code = "l"
+            dtype_code = "i"
         case DataType.INT64:
             dtype_code = "q"
         case DataType.FP32 | None:
