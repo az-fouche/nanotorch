@@ -1,3 +1,3 @@
-from .tensor import Tensor, tensor
+from .tensor import DataType, Tensor
 
-__all__ = ["Tensor", "tensor"]
+__all__ = ["Tensor", "DataType"]

@@ -1,6 +1,33 @@
-import typing
+"""Base tensor class."""
 
-TensorType = list | float
+from array import array
+from enum import Enum, auto
+
+InputType = list | float | int | bool
+TensorShape = tuple[int, ...]
+
+MAX_TENSOR_DEPTH = 2
+
+
+class DataType(Enum):
+    """Supported tensor data types."""
+
+    BOOL = auto()
+    INT32 = auto()
+    INT64 = auto()
+    FP32 = auto()
+    FP64 = auto()
+
+    @classmethod
+    def from_type(cls, data: InputType) -> "DataType":
+        """Automatically initializes a DataType from item."""
+        if isinstance(data, bool):
+            return DataType.BOOL
+        if isinstance(data, int):
+            return DataType.INT64
+        if isinstance(data, float):
+            return DataType.FP32
+        raise TypeError(f"Unsupported Tensor value type: {type(data)}")
 
 
 class Tensor:
@@ -8,103 +35,113 @@ class Tensor:
 
     Parameters
     ----------
-    data: TensorType
-        Container (scalar or list) of the tensor coefficients.
+    data: TensorInputType
+        Tensor coefficients (scalar or list-like).
+    dtype: DataType
+        Data type (optional, otherwise will be autodetected).
     """
 
-    def __init__(self, data: TensorType):
+    def __init__(self, data: InputType, dtype: DataType | None = None):
 
-        if not isinstance(data, TensorType):
+        dtype, shape, flat_data = _extract_tensor_data(data, dtype)
+
+        self._dtype = dtype
+        self._shape = shape
+        self._data = flat_data
+        self._strides = _infer_strides(shape)
+        self._offset = 0
+
+    @property
+    def dtype(self) -> DataType:
+        return self._dtype
+
+    @property
+    def shape(self) -> TensorShape:
+        return self._shape
+
+
+def _extract_tensor_data(
+    data: InputType, user_dtype: DataType | None = None
+) -> tuple[DataType, TensorShape, array]:
+    """Automatically extract tensor information."""
+
+    shape: list[int] = []
+    flat: list[float | int | bool] = []
+    auto_dtype: DataType | None = None
+
+    def rec(data: InputType, depth: int) -> None:
+        nonlocal auto_dtype
+
+        if depth > MAX_TENSOR_DEPTH:
+            raise ValueError(f"Maximum tensor depth reached: {MAX_TENSOR_DEPTH}")
+        if isinstance(data, (bool, int, float)):
+            dtype = DataType.from_type(data)
+            if (
+                auto_dtype is None
+                or dtype == DataType.FP32
+                or dtype == DataType.INT64
+                and auto_dtype != DataType.FP32
+            ):
+                auto_dtype = dtype
+            flat.append(data)
+        elif isinstance(data, list):
+            shape.append(len(data))
+            for node in data:
+                rec(node, depth + 1)
+
+    rec(data, 0)
+
+    if len(shape) > 1:
+        nrows = shape[0]
+        if nrows + 1 != len(shape):
             raise ValueError(
-                f"Unexpected data type: {type(data)}. Expected a type among "
-                f"{', '.join(t.__name__ for t in typing.get_args(TensorType))}"
+                f"Incompatible shape: expected {nrows} rows, got {len(shape) - 1}."
             )
-        _assert_is_tensor_shape(data)
-        self._data = data
+        if any(s != shape[1] for s in shape[2:]):
+            raise ValueError("Incompatible shape: unhomogeneous rows length.")
+        shape = shape[:2]
 
-    def __repr__(self) -> str:
-        """String representation."""
-        return f"NtTensor({_stringify(self._data)})"
+    if auto_dtype is None:
+        auto_dtype = DataType.FP32
+    if user_dtype is not None:
+        final_dtype = user_dtype
+    else:
+        final_dtype = auto_dtype
 
-    def __len__(self) -> int:
-        """Return tensor length over the first dimension."""
-        shape = self.shape
-        if not len(shape):
-            return 0
-        return shape[0]
+    match final_dtype:
+        case DataType.BOOL:
+            dtype_code = "b"
+        case DataType.INT32:
+            dtype_code = "l"
+        case DataType.INT64:
+            dtype_code = "q"
+        case DataType.FP32 | None:
+            dtype_code = "f"
+        case DataType.FP64:
+            dtype_code = "d"
+        case _:
+            raise TypeError(f"Unhandled data type: {DataType}")
 
-    @property
-    def shape(self) -> tuple[int, ...]:
-        """Return tensor shape over each dimension."""
-        dims = []
-        nested = self._data
-        while isinstance(nested, list):
-            dims.append(len(nested))
-            if not len(nested):
-                break
-            nested = nested[0]
-        return tuple(dims)
+    # Needs int cast
+    if auto_dtype in (DataType.FP32, DataType.FP64) and final_dtype in (
+        DataType.BOOL,
+        DataType.INT32,
+        DataType.INT64,
+    ):
+        values = (int(x) for x in flat)
+    else:
+        values = flat
 
-    @property
-    def dim(self) -> int:
-        """Return tensor dimension."""
-        return len(self.shape)
-
-    @property
-    def numel(self) -> int:
-        """Return total number of elements."""
-        nelem = 1
-        for dim_i in self.shape:
-            nelem *= dim_i
-        return nelem
+    return final_dtype, tuple(shape), array(dtype_code, values)
 
 
-def tensor(data: TensorType) -> Tensor:
-    """Create a new tensor.
-
-    Parameters
-    ----------
-    data: TensorType
-        Container (scalar or list) of the tensor coefficients.
-    """
-    return Tensor(data)
-
-
-def _stringify(data: TensorType) -> str:
-    """Converts a tensor into a formatted string."""
-    if not isinstance(data, list):
-        return str(data)
-    return f"[{', '.join(_stringify(row) for row in data)}]"
-
-
-def _assert_is_tensor_shape(data: TensorType) -> None:
-    """Raises an exception if the data is misshaped."""
-    if not isinstance(data, list):
-        return
-
-    data_type: typing.Type | None = None
-    inner_size: int | None = None
-    for row in data:
-        # Type checking
-        if not isinstance(row, TensorType):
-            raise ValueError(f"Non-tensor type detected: {type(row)}")
-        elif data_type is None:
-            data_type = type(row)
-        elif not isinstance(row, data_type):
-            raise ValueError(
-                f"Unhomogeneous data type: {type(row)} (expected {data_type})"
-            )
-
-        # Shape checking
-        if isinstance(row, list):
-            inner_size_i = len(row)
+def _infer_strides(shape: TensorShape) -> TensorShape:
+    """Infer major strides from shape."""
+    strides = []
+    for i in range(len(shape)):
+        if i == 0:
+            new_stride = 1
         else:
-            inner_size_i = 0
-        if inner_size is None:
-            inner_size = inner_size_i
-        elif inner_size_i != inner_size:
-            raise ValueError(
-                f"Unhomogeneous inner size: {inner_size_i} (expected {inner_size})"
-            )
-
-        _assert_is_tensor_shape(row)
+            new_stride = strides[0] * shape[-i]
+        strides.insert(0, new_stride)
+    return tuple(strides)
