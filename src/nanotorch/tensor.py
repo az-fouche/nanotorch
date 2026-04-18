@@ -76,6 +76,18 @@ class DataType(Enum):
     def __le__(self, other: "DataType") -> bool:
         return self.value <= other.value
 
+    @property
+    def is_bool(self) -> bool:
+        return self == DataType.BOOL
+
+    @property
+    def is_int(self) -> bool:
+        return self in (DataType.INT32, DataType.INT64)
+
+    @property
+    def is_float(self) -> bool:
+        return self in (DataType.FP32, DataType.FP64)
+
 
 class Tensor:
     """Base tensor class.
@@ -139,6 +151,26 @@ class Tensor:
             return _C.equals(self.to(promote_type)._data, other._data)
         return _C.equals(self._data, other._data)
 
+    def tolist(self) -> InputType:
+        """Converts the tensor to a list, preserving shape and type."""
+        storage = memoryview(self._data).tolist()
+        if self.dtype.is_bool:
+            storage = [bool(x) for x in storage]
+        if len(self.shape) == 0:
+            return storage[self._offset]
+        if len(self.shape) == 1:
+            return [
+                storage[self._offset + self._strides[0] * i]
+                for i in range(self.shape[0])
+            ]
+        return [
+            [
+                storage[self._offset + self._strides[0] * i + self._strides[1] * j]
+                for j in range(self.shape[1])
+            ]
+            for i in range(self.shape[0])
+        ]
+
     @classmethod
     def _from_tensor_components(
         cls, dtype: DataType, shape: TensorShape, flat_data: _C.Storage
@@ -199,6 +231,8 @@ def _extract_tensor_data(
             shape.append(len(data))
             for node in data:
                 rec(node, depth + 1)
+        else:
+            raise TypeError(f"Unsupported tensor element type: {type(data)}")
 
     rec(data, 0)
 
@@ -221,7 +255,9 @@ def _extract_tensor_data(
         final_dtype = auto_dtype
 
     # Needs int cast
-    if auto_dtype >= DataType.FP32 and final_dtype <= DataType.INT64:
+    if final_dtype.is_bool:
+        values = list(bool(x) for x in flat)
+    elif auto_dtype.is_float and final_dtype.is_int:
         values = list(int(x) for x in flat)
     else:
         values = flat

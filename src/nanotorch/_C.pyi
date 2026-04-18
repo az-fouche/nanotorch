@@ -1,6 +1,8 @@
 import enum
 from typing import Sequence
 
+from typing_extensions import Buffer
+
 class Dtype(enum.Enum):
     """C++-side storage types."""
 
@@ -11,7 +13,7 @@ class Dtype(enum.Enum):
     Float64 = 4
 
 # Layout contract: flattened array representations
-class Storage:
+class Storage(Buffer):
     @staticmethod
     def allocate(n: int, dtype: Dtype) -> "Storage": ...
     @staticmethod
