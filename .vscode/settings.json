@@ -1,0 +1,6 @@
+{                                                                                           
+    "python.analysis.extraPaths": ["src"],
+    "cmake.configureSettings": {
+        "Python_EXECUTABLE": "${workspaceFolder}/.venv/Scripts/python.exe"
+    }
+  }
