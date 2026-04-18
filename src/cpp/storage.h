@@ -72,4 +72,4 @@ private:
     py::ssize_t n_;
 };
 
-void bind_storage(py::module_& m);
+void bind_storage_(py::module_& m);

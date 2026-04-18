@@ -17,7 +17,11 @@ execute_process(
 )
 find_package(pybind11 CONFIG REQUIRED)
 
-pybind11_add_module(_C MODULE src/cpp/_C.cpp src/cpp/storage.cpp)
+pybind11_add_module(_C MODULE 
+    src/cpp/_C.cpp 
+    src/cpp/storage.cpp
+    src/cpp/ops.cpp
+)
 target_compile_options(_C PRIVATE /W4)
 
 install(TARGETS _C DESTINATION nanotorch)

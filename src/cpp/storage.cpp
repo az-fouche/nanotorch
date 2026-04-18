@@ -88,7 +88,7 @@ py::buffer_info Storage::buffer_info() const {
     );
 }
 
-void bind_storage(py::module_& m) {
+void bind_storage_(py::module_& m) {
     py::enum_<Dtype>(m, "Dtype")
         .value("Bool", Dtype::Bool)
         .value("Int32", Dtype::Int32)
