@@ -1,4 +1,8 @@
+import pytest
+
 import nanotorch as nt
+
+# Sum
 
 
 def test_tensor_sum_empty():
@@ -67,13 +71,31 @@ def test_tensor_sum_fp64():
     assert x.sum().dtype == nt.DataType.FP32
 
 
-def test_tensor_equal_shape():
+def test_tensor_sum_transpose():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    assert x.sum().tolist() == x.transpose().sum().tolist()
+
+
+def test_tensor_sum_1d_intindex_slice():
+    x = nt.tensor([1, 2, 3, 4, 5, 6])
+    assert x[3].sum().tolist() == 4
+
+
+def test_tensor_sum_2d_intindex_slice():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    assert x[1].sum().tolist() == 15
+
+
+# Equals
+
+
+def test_tensor_equals_shape():
     x = nt.tensor([1, 2, 3])
     y = nt.tensor([1, 2])
     assert not x.equals(y)
 
 
-def test_tensor_equal_type():
+def test_tensor_equals_type():
     i32 = nt.tensor([1, 2, 3], dtype=nt.DataType.INT32)
     i64 = nt.tensor([1, 2, 3], dtype=nt.DataType.INT64)
     f32 = nt.tensor([1, 2, 3], dtype=nt.DataType.FP32)
@@ -83,7 +105,7 @@ def test_tensor_equal_type():
     assert i32.equals(f64)
 
 
-def test_tensor_equal_empty():
+def test_tensor_equals_empty():
     assert nt.tensor([]).equals(nt.tensor([]))
 
 
@@ -97,3 +119,217 @@ def test_tensor_unequal_close():
     x = nt.tensor([1, 2, 3, 4, 5])
     y = nt.tensor([1, 2, 3.00001, 4, 5])
     assert not x.equals(y)
+
+
+def test_tensor_equals_1d_intindex_slice():
+    x = nt.tensor([1, 2, 3, 4, 5, 6])
+    xt = [1, 2, 3, 4, 5, 6]
+    for i in range(6):
+        assert x[i].equals(nt.tensor(xt[i]))
+
+
+def test_tensor_equals_2d_intindex_slice():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    xt0 = nt.tensor([1, 2, 3])
+    xt1 = nt.tensor([4, 5, 6])
+    xt2 = nt.tensor([7, 8, 9])
+    assert x[0].equals(xt0)
+    assert x[1].equals(xt1)
+    assert x[2].equals(xt2)
+
+
+# Transpose
+
+
+def test_tensor_transpose_empty():
+    x = nt.tensor([])
+    assert x.transpose() is x
+
+
+def test_tensor_transpose_0d():
+    x = nt.tensor(0.0)
+    assert x.transpose() is x
+
+
+def test_tensor_transpose_1d():
+    x = nt.tensor([0.0, 1.0, 2.0, 3.0])
+    assert x.transpose() is x
+
+
+def test_tensor_transpose_2d():
+    x = nt.tensor(
+        [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+        ]
+    )
+    assert x.transpose().tolist() == [
+        [0, 4, 8],
+        [1, 5, 9],
+        [2, 6, 10],
+        [3, 7, 11],
+    ]
+
+
+# Contiguous
+
+
+def test_tensor_contiguous():
+    x = nt.tensor(
+        [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+        ]
+    )
+    assert x._is_contiguous()
+
+
+def test_tensor_not_contiguous():
+    x = nt.tensor(
+        [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+        ]
+    )
+    assert not x.transpose()._is_contiguous()
+
+
+def test_tensor_to_contiguous():
+    x = nt.tensor(
+        [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+        ]
+    )
+    assert x._to_contiguous() is x
+
+
+def test_tensor_not_contiguous_to_contiguous():
+    x = nt.tensor(
+        [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7],
+            [8, 9, 10, 11],
+        ]
+    )
+    assert x.transpose()._to_contiguous()._is_contiguous()
+
+
+# Reshape
+
+
+def test_reshape_empty():
+    x = nt.tensor([1, 2, 3])
+    with pytest.raises(ValueError):
+        x.reshape()
+
+
+def test_reshape_0d():
+    x = nt.tensor(0.0)
+    assert x.reshape(1).tolist() == [0.0]
+
+
+def test_reshape_1d_identity():
+    x = nt.tensor([1, 2, 3])
+    assert x.reshape(3) is x
+
+
+def test_reshape_1d_2d():
+    x = nt.tensor([1, 2, 3, 4, 5, 6])
+    assert x.reshape(2, 3).tolist() == [[1, 2, 3], [4, 5, 6]]
+
+
+def test_reshape_1d_d1():
+    x = nt.tensor([1, 2, 3, 4, 5, 6])
+    assert x.reshape(1, 6).tolist() == [[1, 2, 3, 4, 5, 6]]
+
+
+def test_reshape_2d_1d():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6]])
+    assert x.reshape(6).tolist() == [1, 2, 3, 4, 5, 6]
+
+
+def test_reshape_no_contiguous():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6]])
+    assert x.transpose().reshape(6).tolist() == [1, 4, 2, 5, 3, 6]
+
+
+# __getitem__: single index
+
+
+def test_getitem_intindex_0d():
+    x = nt.tensor(0.0)
+    with pytest.raises(IndexError):
+        x[0]
+
+
+def test_getitem_intindex_1d():
+    x = nt.tensor([6, 5, 4, 3, 2, 1])
+    for i in range(6):
+        assert x[i].tolist() == 6 - i
+
+
+def test_getitem_intindex_1d_wrap():
+    x = nt.tensor([6, 5, 4, 3, 2, 1])
+    for i in range(6):
+        assert x[-i - 1].tolist() == i + 1
+
+
+def test_getitem_intindex_1d_oob():
+    x = nt.tensor([6, 5, 4, 3, 2, 1])
+    with pytest.raises(IndexError):
+        x[6]
+
+
+def test_getitem_intindex_1d_wrap_oob():
+    x = nt.tensor([6, 5, 4, 3, 2, 1])
+    with pytest.raises(IndexError):
+        x[-7]
+
+
+def test_getitem_intindex_2d():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[0].tolist() == [1, 2, 3, 4]
+    assert x[1].tolist() == [5, 6, 7, 8]
+    assert x[2].tolist() == [9, 10, 11, 12]
+
+
+def test_getitem_intindex_2d_oob():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    with pytest.raises(IndexError):
+        x[3]
+
+
+def test_getitem_intindex_2d_wrap():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[-3].tolist() == [1, 2, 3, 4]
+    assert x[-2].tolist() == [5, 6, 7, 8]
+    assert x[-1].tolist() == [9, 10, 11, 12]
+
+
+def test_getitem_intindex_2d_wrap_oob():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    with pytest.raises(IndexError):
+        x[-4]
+
+
+def test_getitem_intindex_2d_transpose():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]).transpose()
+    assert x[0].tolist() == [1, 5, 9]
+    assert x[1].tolist() == [2, 6, 10]
+    assert x[2].tolist() == [3, 7, 11]
+    assert x[3].tolist() == [4, 8, 12]
+
+
+def test_getitem_intindex_2d_reshape():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]).reshape(6, 2)
+    assert x[0].tolist() == [1, 2]
+    assert x[1].tolist() == [3, 4]
+    assert x[2].tolist() == [5, 6]
+    assert x[3].tolist() == [7, 8]
+    assert x[4].tolist() == [9, 10]
+    assert x[5].tolist() == [11, 12]

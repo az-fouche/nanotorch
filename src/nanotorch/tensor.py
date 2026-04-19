@@ -1,5 +1,6 @@
 """Base tensor class."""
 
+import math
 from enum import Enum
 
 from nanotorch import _C
@@ -110,6 +111,31 @@ class Tensor:
         self._strides = _infer_strides(shape)
         self._offset = 0
 
+    def __repr__(self) -> str:
+        return f"nt.Tensor({self.tolist()})"
+
+    def __len__(self):
+        if not len(self._shape):
+            return 0
+        return self._shape[0]
+
+    def __getitem__(self, index: int) -> "Tensor":
+        if index < 0:
+            index = len(self) + index
+        if len(self.shape) == 0 or index < 0 or index >= len(self):
+            raise IndexError(
+                f"Cannot access index {index} in tensor of shape {self.shape}."
+            )
+        shape = self.shape[1:]
+        offset = self._strides[0] * index
+        return Tensor._from_tensor_components(
+            dtype=self.dtype,
+            shape=shape,
+            flat_data=self._data,
+            strides=self._strides[1:],
+            offset=offset,
+        )
+
     @property
     def dtype(self) -> DataType:
         """Tensor internal data type."""
@@ -130,26 +156,65 @@ class Tensor:
         if target == self.dtype:
             return self
         new_buffer = _C.cast(self._data, target.cpp_dtype)
-        return Tensor._from_tensor_components(target, self.shape, new_buffer)
+        return Tensor._from_tensor_components(
+            target, self.shape, new_buffer, self._strides, self._offset
+        )
+
+    def transpose(self) -> "Tensor":
+        """Returns a transposed view (no copy)."""
+        if len(self.shape) != 2:
+            return self
+        return Tensor._from_tensor_components(
+            self.dtype,
+            tuple(reversed(self.shape)),
+            self._data,
+            tuple(reversed(self._strides)),
+            self._offset,
+        )
+
+    def reshape(self, *dims: int) -> "Tensor":
+        """Returns a reshaped view (no copy)."""
+        if math.prod(dims) != math.prod(self.shape):
+            raise ValueError(f"Can't reshape {self.shape} into {dims}.")
+        if len(dims) == 0:
+            raise ValueError("No dimensions provided.")
+        if dims == self.shape:
+            return self
+        base = self._to_contiguous()
+        return Tensor._from_tensor_components(
+            base.dtype, tuple(dims), base._data, strides=None, offset=base._offset
+        )
+
+    # Common ops shortcuts
 
     def sum(self) -> "Tensor":
         """Compute per-coef sum of tensor coefficients."""
-        if self.is_empty:
+        if self.is_empty:  # FIXME: strides&offset
             return Tensor(0, dtype=self.dtype)
-        return Tensor(_C.sum(self._data))
+        return Tensor(_C.sum(self._data, self.shape, self._strides, self._offset))
 
     def equals(self, other: "Tensor") -> bool:
         """Test per-coefficient equality, auto-promotes to best dtype."""
-        if self.shape != other.shape:  # FIXME: strides&offset
+        if self.shape != other.shape:
             return False
         if self.is_empty and other.is_empty:
             return True
         promote_type = _promote_types(self.dtype, other.dtype)
+        first = self
+        if promote_type != self.dtype:
+            first = self.to(promote_type)
         if promote_type != other.dtype:
             other = other.to(promote_type)
-        if promote_type != self.dtype:
-            return _C.equals(self.to(promote_type)._data, other._data)
-        return _C.equals(self._data, other._data)
+        return _C.equals(
+            first._data,
+            first.shape,
+            first._strides,
+            first._offset,
+            other._data,
+            other.shape,
+            other._strides,
+            other._offset,
+        )
 
     def tolist(self) -> InputType:
         """Converts the tensor to a list, preserving shape and type."""
@@ -171,17 +236,46 @@ class Tensor:
             for i in range(self.shape[0])
         ]
 
+    # Private operators
+
+    def _is_contiguous(self) -> bool:
+        """Checks if current view is contiguous in memory."""
+        return self._strides == _infer_strides(self._shape)
+
+    def _to_contiguous(self) -> "Tensor":
+        """Returns a contiguous version of the tensor (copy if necessary)."""
+        if self._is_contiguous():
+            return self
+        return Tensor(self.tolist(), self.dtype)
+
     @classmethod
     def _from_tensor_components(
-        cls, dtype: DataType, shape: TensorShape, flat_data: _C.Storage
+        cls,
+        dtype: DataType,
+        shape: TensorShape,
+        flat_data: _C.Storage,
+        strides: TensorShape | None,
+        offset: int | None,
     ) -> "Tensor":
         """Intializes a new tensor from precomputed components."""
+
+        strides = _infer_strides(shape) if strides is None else strides
+        offset = 0 if offset is None else offset
+        max_index = offset + sum(
+            (s - 1) * abs(st) for s, st in zip(shape, strides) if s > 0
+        )
+        max_storage = len(memoryview(flat_data))
+        if math.prod(shape) > 0 and max_index >= max_storage:
+            raise IndexError(
+                f"View max index {max_index} exceeds storage capacity {max_storage}."
+            )
+
         new = cls.__new__(cls)
         new._dtype = dtype
         new._shape = shape
         new._data = flat_data
-        new._strides = _infer_strides(shape)
-        new._offset = 0
+        new._strides = strides
+        new._offset = offset
         return new
 
 
@@ -191,16 +285,6 @@ class Tensor:
 def tensor(data: InputType, dtype: DataType | None = None) -> Tensor:
     """Initialize a new tensor."""
     return Tensor(data, dtype)
-
-
-def sum(tensor: Tensor) -> Tensor:
-    """Compute per-coef sum of tensor coefficients."""
-    return tensor.sum()
-
-
-def equals(t1: Tensor, t2: Tensor) -> bool:
-    """Test per-coefficient equality, auto-promotes to best dtype."""
-    return t1.equals(t2)
 
 
 # Private functions
