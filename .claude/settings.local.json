@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(mv '/c/Users/azizf/code/nanotorch/memory/'*.md '/c/Users/azizf/.claude/projects/C--Users-azizf-code-nanotorch/memory/')",
-      "Bash(rmdir '/c/Users/azizf/code/nanotorch/memory')",
-      "Read(//c/Users/azizf/.claude/projects/C--Users-azizf-code-nanotorch/memory//**)"
-    ]
-  }
-}
