@@ -111,6 +111,36 @@ class Tensor:
         self._strides = _infer_strides(shape)
         self._offset = 0
 
+    @classmethod
+    def init_from_components(
+        cls,
+        dtype: DataType,
+        shape: TensorShape,
+        flat_data: _C.Storage,
+        strides: TensorShape | None,
+        offset: int | None,
+    ) -> "Tensor":
+        """Intializes a new tensor from precomputed components."""
+
+        strides = _infer_strides(shape) if strides is None else strides
+        offset = 0 if offset is None else offset
+        max_index = offset + sum(
+            (s - 1) * abs(st) for s, st in zip(shape, strides) if s > 0
+        )
+        max_storage = len(memoryview(flat_data))
+        if math.prod(shape) > 0 and max_index >= max_storage:
+            raise IndexError(
+                f"View max index {max_index} exceeds storage capacity {max_storage}."
+            )
+
+        new = cls.__new__(cls)
+        new._dtype = dtype
+        new._shape = shape
+        new._data = flat_data
+        new._strides = strides
+        new._offset = offset
+        return new
+
     def __repr__(self) -> str:
         return f"nt.Tensor({self.tolist()})"
 
@@ -128,7 +158,7 @@ class Tensor:
             )
         shape = self.shape[1:]
         offset = self._offset + self._strides[0] * index
-        return Tensor._from_tensor_components(
+        return Tensor.init_from_components(
             dtype=self.dtype,
             shape=shape,
             flat_data=self._data,
@@ -161,7 +191,7 @@ class Tensor:
         """Returns a transposed view (no copy)."""
         if len(self.shape) < 2:
             return self
-        return Tensor._from_tensor_components(
+        return Tensor.init_from_components(
             self.dtype,
             tuple(reversed(self.shape)),
             self._data,
@@ -174,7 +204,7 @@ class Tensor:
         if target == self.dtype:
             return self
         new_buffer = _C.cast(self._data, target.cpp_dtype)
-        return Tensor._from_tensor_components(
+        return Tensor.init_from_components(
             target, self.shape, new_buffer, self._strides, self._offset
         )
 
@@ -187,7 +217,7 @@ class Tensor:
         if dims == self.shape:
             return self
         base = self._to_contiguous()
-        return Tensor._from_tensor_components(
+        return Tensor.init_from_components(
             base.dtype, tuple(dims), base._data, strides=None, offset=base._offset
         )
 
@@ -202,7 +232,7 @@ class Tensor:
             strides[dim1],
             strides[dim0],
         )
-        return Tensor._from_tensor_components(
+        return Tensor.init_from_components(
             self.dtype,
             tuple(shape),
             self._data,
@@ -270,44 +300,6 @@ class Tensor:
         if self._is_contiguous():
             return self
         return Tensor(self.tolist(), self.dtype)
-
-    @classmethod
-    def _from_tensor_components(
-        cls,
-        dtype: DataType,
-        shape: TensorShape,
-        flat_data: _C.Storage,
-        strides: TensorShape | None,
-        offset: int | None,
-    ) -> "Tensor":
-        """Intializes a new tensor from precomputed components."""
-
-        strides = _infer_strides(shape) if strides is None else strides
-        offset = 0 if offset is None else offset
-        max_index = offset + sum(
-            (s - 1) * abs(st) for s, st in zip(shape, strides) if s > 0
-        )
-        max_storage = len(memoryview(flat_data))
-        if math.prod(shape) > 0 and max_index >= max_storage:
-            raise IndexError(
-                f"View max index {max_index} exceeds storage capacity {max_storage}."
-            )
-
-        new = cls.__new__(cls)
-        new._dtype = dtype
-        new._shape = shape
-        new._data = flat_data
-        new._strides = strides
-        new._offset = offset
-        return new
-
-
-# Function-style ops
-
-
-def tensor(data: InputType, dtype: DataType | None = None) -> Tensor:
-    """Initialize a new tensor."""
-    return Tensor(data, dtype)
 
 
 # Private functions

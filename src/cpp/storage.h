@@ -3,10 +3,19 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+
+#if defined(_MSC_VER) && !defined(__clang__)
+    #define NT_UNREACHABLE() __assume(false)
+#elif defined(__GNUC__) || defined(__clang__)
+    #define NT_UNREACHABLE() __builtin__unreachable()
+#else
+    #define NT_UNREACHABLE() std::abort()
+#endif
 
 namespace py = pybind11;
 
@@ -47,6 +56,7 @@ auto dispatch_dtype(Dtype dtype, F&& func) {
 }
 
 class Storage : public std::enable_shared_from_this<Storage> {
+    // Holds a contiguous memory slice
 public:
     Storage(py::ssize_t n, Dtype dtype);
     Storage(const Storage&) = delete;
@@ -72,5 +82,50 @@ private:
     Dtype dtype_;
     py::ssize_t n_;
 };
+
+class Scalar {
+    // Holds a scalar value with flexible type
+public:
+    Scalar() = default;
+    Scalar(py::object obj) {
+        if (py::isinstance<py::bool_>(obj))       data_ = obj.cast<bool>();
+        else if (py::isinstance<py::int_>(obj))   data_ = obj.cast<int64_t>();
+        else if (py::isinstance<py::float_>(obj)) data_ = obj.cast<double>();
+        else throw py::type_error("Unknown scalar type.");
+    }
+
+    template <typename T>
+    T item() const { return std::visit([](auto v) { return static_cast<T>(v); }, data_); }
+    Dtype dtype() const { 
+        switch (data_.index()) { 
+            case 0: return Dtype::Bool; 
+            case 1: return Dtype::Int64; 
+            case 2: return Dtype::Float64;
+            default: NT_UNREACHABLE();
+        } 
+    }
+private:
+    std::variant<bool, int64_t, double> data_;
+};
+
+namespace pybind11 { namespace detail {
+
+// Registers a special Python -> Scalar caster
+template <> struct type_caster<Scalar> {
+    PYBIND11_TYPE_CASTER(Scalar, const_name("bool | int | float"));
+
+    bool load(handle src, bool /*convert*/) {
+        if (!src) return false;
+        if (py::isinstance<py::bool_>(src)
+            || py::isinstance<py::int_>(src)
+            || py::isinstance<py::float_>(src)) {
+            value = Scalar(reinterpret_borrow<py::object>(src));
+            return true;
+        }
+        return false;
+    }
+};
+
+}} // namespace pybind11::detail
 
 void bind_storage_(py::module_& m);
