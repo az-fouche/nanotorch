@@ -1,6 +1,24 @@
+import numpy as np
 import pytest
 
 import nanotorch as nt
+
+# Tolist
+
+
+def test_tolist():
+    x = nt.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    assert x.tolist() == [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]
+
+
+def test_tolist_extensive():
+    np.random.seed(42)
+    for _ in range(100):
+        ndim = np.random.randint(0, 5)
+        shape = np.random.randint(0, 5, (ndim,))
+        xt = np.random.randint(-10, 10, shape).tolist()
+        assert nt.tensor(xt).tolist() == xt
+
 
 # Sum
 
@@ -26,6 +44,12 @@ def test_tensor_sum_1d():
 def test_tensor_sum_2d():
     x = nt.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
     assert x.sum().tolist() == 21.0
+    assert x.sum().dtype == nt.DataType.FP32
+
+
+def test_tensor_sum_3d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert x.sum().tolist() == 36.0
     assert x.sum().dtype == nt.DataType.FP32
 
 
@@ -73,7 +97,7 @@ def test_tensor_sum_fp64():
 
 def test_tensor_sum_transpose():
     x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-    assert x.sum().tolist() == x.transpose().sum().tolist()
+    assert x.sum().tolist() == x.T.sum().tolist()
 
 
 def test_tensor_sum_1d_intindex_slice():
@@ -143,17 +167,17 @@ def test_tensor_equals_2d_intindex_slice():
 
 def test_tensor_transpose_empty():
     x = nt.tensor([])
-    assert x.transpose() is x
+    assert x.T is x
 
 
 def test_tensor_transpose_0d():
     x = nt.tensor(0.0)
-    assert x.transpose() is x
+    assert x.T is x
 
 
 def test_tensor_transpose_1d():
     x = nt.tensor([0.0, 1.0, 2.0, 3.0])
-    assert x.transpose() is x
+    assert x.T is x
 
 
 def test_tensor_transpose_2d():
@@ -164,12 +188,27 @@ def test_tensor_transpose_2d():
             [8, 9, 10, 11],
         ]
     )
-    assert x.transpose().tolist() == [
+    assert x.T.tolist() == [
         [0, 4, 8],
         [1, 5, 9],
         [2, 6, 10],
         [3, 7, 11],
     ]
+
+
+def test_tensor_transpose_3d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert x.T.tolist() == [[[1, 5], [3, 7]], [[2, 6], [4, 8]]]
+
+
+def test_cast_after_transpose():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6]])
+    assert x.T.to(nt.DataType.FP64).tolist() == [[1, 4], [2, 5], [3, 6]]
+
+
+def test_manual_transpose():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6]])
+    assert x.T.equals(x.transpose(0, 1))
 
 
 # Contiguous
@@ -194,7 +233,7 @@ def test_tensor_not_contiguous():
             [8, 9, 10, 11],
         ]
     )
-    assert not x.transpose()._is_contiguous()
+    assert not x.T._is_contiguous()
 
 
 def test_tensor_to_contiguous():
@@ -216,7 +255,7 @@ def test_tensor_not_contiguous_to_contiguous():
             [8, 9, 10, 11],
         ]
     )
-    assert x.transpose()._to_contiguous()._is_contiguous()
+    assert x.T._to_contiguous()._is_contiguous()
 
 
 # Reshape
@@ -243,6 +282,11 @@ def test_reshape_1d_2d():
     assert x.reshape(2, 3).tolist() == [[1, 2, 3], [4, 5, 6]]
 
 
+def test_reshape_1d_3d():
+    x = nt.tensor([1, 2, 3, 4, 5, 6, 7, 8])
+    assert x.reshape(2, 2, 2).tolist() == [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+
+
 def test_reshape_1d_d1():
     x = nt.tensor([1, 2, 3, 4, 5, 6])
     assert x.reshape(1, 6).tolist() == [[1, 2, 3, 4, 5, 6]]
@@ -253,9 +297,14 @@ def test_reshape_2d_1d():
     assert x.reshape(6).tolist() == [1, 2, 3, 4, 5, 6]
 
 
+def test_reshape_3d_1d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert x.reshape(8).tolist() == [1, 2, 3, 4, 5, 6, 7, 8]
+
+
 def test_reshape_no_contiguous():
     x = nt.tensor([[1, 2, 3], [4, 5, 6]])
-    assert x.transpose().reshape(6).tolist() == [1, 4, 2, 5, 3, 6]
+    assert x.T.reshape(6).tolist() == [1, 4, 2, 5, 3, 6]
 
 
 # __getitem__: single index
@@ -318,7 +367,7 @@ def test_getitem_intindex_2d_wrap_oob():
 
 
 def test_getitem_intindex_2d_transpose():
-    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]).transpose()
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]).T
     assert x[0].tolist() == [1, 5, 9]
     assert x[1].tolist() == [2, 6, 10]
     assert x[2].tolist() == [3, 7, 11]
@@ -333,3 +382,30 @@ def test_getitem_intindex_2d_reshape():
     assert x[3].tolist() == [7, 8]
     assert x[4].tolist() == [9, 10]
     assert x[5].tolist() == [11, 12]
+
+
+def test_getitem_intindex_3d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert x[0].tolist() == [[1, 2], [3, 4]]
+
+
+def test_getitem_chained_3d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert x[1][1][0].tolist() == 7
+
+
+# Weird cases
+
+
+def test_zero_dim_shape_2d():
+    x = nt.tensor([[], [], []])
+    assert x.shape == (3, 0)
+    assert x.tolist() == [[], [], []]
+    assert x.sum().tolist() == 0
+
+
+def test_zero_dim_shape_3d_middle():
+    x = nt.tensor([[[]], [[]]])
+    assert x.shape == (2, 1, 0)
+    assert x.tolist() == [[[]], [[]]]
+    assert x.sum().tolist() == 0

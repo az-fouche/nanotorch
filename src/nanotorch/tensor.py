@@ -8,7 +8,7 @@ from nanotorch import _C
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
 
-MAX_TENSOR_DEPTH = 2
+MAX_TENSOR_LEVEL = 32
 
 
 class DataType(Enum):
@@ -127,7 +127,7 @@ class Tensor:
                 f"Cannot access index {index} in tensor of shape {self.shape}."
             )
         shape = self.shape[1:]
-        offset = self._strides[0] * index
+        offset = self._offset + self._strides[0] * index
         return Tensor._from_tensor_components(
             dtype=self.dtype,
             shape=shape,
@@ -147,9 +147,27 @@ class Tensor:
         return self._shape
 
     @property
+    def ndim(self) -> int:
+        """Returns the number of tensor dimensions."""
+        return len(self._shape)
+
+    @property
     def is_empty(self) -> bool:
         """Detects empty tensor."""
         return self.shape == (0,)
+
+    @property
+    def T(self) -> "Tensor":
+        """Returns a transposed view (no copy)."""
+        if len(self.shape) < 2:
+            return self
+        return Tensor._from_tensor_components(
+            self.dtype,
+            tuple(reversed(self.shape)),
+            self._data,
+            tuple(reversed(self._strides)),
+            self._offset,
+        )
 
     def to(self, target: DataType) -> "Tensor":
         """Cast the tensor to a new DataType, leaves inplace if no cast needed."""
@@ -158,18 +176,6 @@ class Tensor:
         new_buffer = _C.cast(self._data, target.cpp_dtype)
         return Tensor._from_tensor_components(
             target, self.shape, new_buffer, self._strides, self._offset
-        )
-
-    def transpose(self) -> "Tensor":
-        """Returns a transposed view (no copy)."""
-        if len(self.shape) != 2:
-            return self
-        return Tensor._from_tensor_components(
-            self.dtype,
-            tuple(reversed(self.shape)),
-            self._data,
-            tuple(reversed(self._strides)),
-            self._offset,
         )
 
     def reshape(self, *dims: int) -> "Tensor":
@@ -183,6 +189,25 @@ class Tensor:
         base = self._to_contiguous()
         return Tensor._from_tensor_components(
             base.dtype, tuple(dims), base._data, strides=None, offset=base._offset
+        )
+
+    def transpose(self, dim0: int, dim1: int) -> "Tensor":
+        """Permutes two tensor dimensions."""
+        if len(self.shape) < 2:
+            return self
+        shape, strides = list(self.shape), list(self._strides)
+        shape[dim0], shape[dim1], strides[dim0], strides[dim1] = (
+            shape[dim1],
+            shape[dim0],
+            strides[dim1],
+            strides[dim0],
+        )
+        return Tensor._from_tensor_components(
+            self.dtype,
+            tuple(shape),
+            self._data,
+            tuple(strides),
+            self._offset,
         )
 
     # Common ops shortcuts
@@ -218,23 +243,21 @@ class Tensor:
 
     def tolist(self) -> InputType:
         """Converts the tensor to a list, preserving shape and type."""
-        storage = memoryview(self._data).tolist()
-        if self.dtype.is_bool:
-            storage = [bool(x) for x in storage]
-        if len(self.shape) == 0:
-            return storage[self._offset]
-        if len(self.shape) == 1:
+        storage = memoryview(self._data)
+
+        def rec(
+            shape: TensorShape, strides: TensorShape, offset: int, depth: int
+        ) -> InputType:
+            if depth == len(shape):
+                if self.dtype.is_bool:
+                    return bool(storage[offset])
+                return storage[offset]
             return [
-                storage[self._offset + self._strides[0] * i]
-                for i in range(self.shape[0])
+                rec(shape, strides, offset + strides[depth] * i, depth + 1)
+                for i in range(shape[depth])
             ]
-        return [
-            [
-                storage[self._offset + self._strides[0] * i + self._strides[1] * j]
-                for j in range(self.shape[1])
-            ]
-            for i in range(self.shape[0])
-        ]
+
+        return rec(self.shape, self._strides, self._offset, 0)
 
     # Private operators
 
@@ -299,37 +322,38 @@ def _extract_tensor_data(
     shape: list[int] = []
     flat: list[float | int | bool] = []
     auto_dtype: DataType | None = None
+    leaf_level: int | None = None
 
-    def rec(data: InputType, depth: int) -> None:
+    def rec(data: InputType, level: int) -> None:
         # Recursive walk through the data
         nonlocal auto_dtype
+        nonlocal leaf_level
 
-        if depth > MAX_TENSOR_DEPTH:
-            raise ValueError(f"Maximum tensor depth reached: {MAX_TENSOR_DEPTH}")
+        if level > MAX_TENSOR_LEVEL:
+            raise ValueError(f"Maximum tensor depth reached: {MAX_TENSOR_LEVEL}")
         if isinstance(data, (bool, int, float)):
+            if leaf_level is None:
+                leaf_level = level
+            elif level != leaf_level:
+                raise ValueError("Leaf found at non-terminal level.")
             dtype = DataType.from_type(data)
             if auto_dtype is None or dtype > auto_dtype:
                 auto_dtype = dtype
             flat.append(data)
         elif isinstance(data, list):
-            shape.append(len(data))
+            nnodes = len(data)
+            if level >= len(shape):
+                shape.append(nnodes)
+            elif shape[level] != nnodes:
+                raise ValueError(
+                    f"Unhomogeneous tensor shape detected ({shape[level]} != {nnodes})"
+                )
             for node in data:
-                rec(node, depth + 1)
+                rec(node, level + 1)
         else:
             raise TypeError(f"Unsupported tensor element type: {type(data)}")
 
     rec(data, 0)
-
-    # Shape validation
-    if len(shape) > 1:
-        nrows = shape[0]
-        if nrows + 1 != len(shape):
-            raise ValueError(
-                f"Incompatible shape: expected {nrows} rows, got {len(shape) - 1}."
-            )
-        if any(s != shape[1] for s in shape[2:]):
-            raise ValueError("Incompatible shape: unhomogeneous rows length.")
-        shape = shape[:2]
 
     # Final type casting
     auto_dtype = auto_dtype or DataType.FP32

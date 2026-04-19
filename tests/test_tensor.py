@@ -15,6 +15,7 @@ def test_tensor_init_scalar():
     assert x.tolist() == 0.0
     assert x.dtype == nt.DataType.FP32
     assert x.shape == ()
+    assert x.ndim == 0
 
 
 def test_tensor_init_1d_fp32():
@@ -71,6 +72,7 @@ def test_tensor_init_booltoint():
     assert x.tolist() == [1, 1, 3, 1]
     assert x.dtype == nt.DataType.INT64
     assert x.shape == (4,)
+    assert x.ndim == 1
 
 
 def test_tensor_init_2d():
@@ -88,16 +90,40 @@ def test_tensor_init_2d():
     ]
     assert x.dtype == nt.DataType.FP32
     assert x.shape == (3, 4)
+    assert x.ndim == 2
+
+
+def test_tensor_init_3d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
+    assert x.tolist() == [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+    assert x.dtype == nt.DataType.INT64
+    assert x.shape == (2, 2, 2)
+    assert x.ndim == 3
+
+
+def test_tensor_init_maxrank():
+    x32 = nt.tensor([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]])
+    assert x32.ndim == 32
+
+
+def test_tensor_init_overrank():
+    with pytest.raises(ValueError):
+        # 33
+        nt.tensor([[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[1]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]])
 
 
 def test_tensor_ragged_raises():
     with pytest.raises(ValueError):
         nt.tensor([[1, 2], [3]])
-
-
-def test_tensor_3d_raises():
     with pytest.raises(ValueError):
-        nt.tensor([[[1]]])
+        nt.tensor([[[1, 2]], [[3]]])
+
+
+def test_tensor_heterogeneous_raises():
+    with pytest.raises(ValueError):
+        nt.tensor([1, [2]])
+    with pytest.raises(ValueError):
+        nt.tensor([[1], 2])
 
 
 def test_tensor_str_raises():
