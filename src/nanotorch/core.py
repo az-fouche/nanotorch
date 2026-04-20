@@ -2,7 +2,7 @@
 
 import math
 from enum import Enum
-from typing import NamedTuple, Sequence
+from typing import Any, NamedTuple, Sequence
 
 from nanotorch import _C
 
@@ -147,7 +147,28 @@ class Tensor:
         return new
 
     def __repr__(self) -> str:
-        return f"nt.Tensor({self.tolist()})"
+        if self.ndim == 0:
+            return f"nt.Tensor({self.tolist()})"
+        elif self.ndim == 1:
+            return f"nt.Tensor({_str_list_compact(self.tolist())})"
+        elif self.ndim == 2:
+            if len(self) <= 5:
+                indices = list(range(len(self)))
+            else:
+                indices = [0, 1, None, -2, -1]
+            buff = "nt.Tensor("
+            for ni, i in enumerate(indices):
+                if ni > 0:
+                    buff += "          "
+                if i is None:
+                    buff += "..."
+                else:
+                    buff += _str_list_compact(self[i].tolist()) + ""
+                if ni < len(indices) - 1:
+                    buff += "\n"
+            return buff + ")"
+
+        return f"nt.Tensor(shape={self.shape}, {self.numel} x <{self.dtype.name}>"
 
     def __len__(self):
         if not len(self._shape):
@@ -210,6 +231,11 @@ class Tensor:
         return len(self._shape)
 
     @property
+    def numel(self) -> int:
+        """Returns the number of values in the tensor."""
+        return math.prod(self.shape)
+
+    @property
     def is_empty(self) -> bool:
         """Detects empty tensor."""
         return self.shape == (0,)
@@ -238,7 +264,7 @@ class Tensor:
 
     def reshape(self, *dims: int) -> "Tensor":
         """Returns a reshaped view (no copy)."""
-        if math.prod(dims) != math.prod(self.shape):
+        if math.prod(dims) != self.numel:
             raise ValueError(f"Can't reshape {self.shape} into {dims}.")
         if len(dims) == 0:
             raise ValueError("No dimensions provided.")
@@ -418,6 +444,21 @@ def _promote_types(*dtypes: DataType) -> DataType:
             if best_dtype == DataType.FP64:
                 return best_dtype
     return best_dtype or DataType.FP32
+
+
+def _str_list_compact(li: Any) -> str:
+    """Returns a compact list string."""
+    if not isinstance(li, list):
+        return str(li)
+    if len(li) < 8:
+        return str(li)
+    return (
+        "["
+        + ", ".join(str(x) for x in li[:3])
+        + ", ..., "
+        + ", ".join(str(x) for x in li[-3:])
+        + "]"
+    )
 
 
 # Indexing machinery
