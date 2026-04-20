@@ -50,3 +50,13 @@ def equals(
     of2: int,
 ) -> bool: ...
 def sum(s: Storage, sh: tuple[int, ...], st: tuple[int, ...], of: int) -> float: ...
+
+# Core ops
+def _gather_from_indices(
+    s: Storage,
+    sh: tuple[int, ...],
+    st: tuple[int, ...],
+    of: int,
+    index_arrays: Sequence[Storage],
+    fancy_axes: Sequence[int],
+) -> Storage: ...

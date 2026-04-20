@@ -346,24 +346,39 @@ def test_getitem_intindex_1d_wrap_oob():
         x[-7]
 
 
-def test_getitem_intindex_1d_slice():
+def test_getitem_slice_1d():
     x = nt.tensor([1, 3, 4, 5, 6, 9])
     assert x[2:5].tolist() == [4, 5, 6]
 
 
-def test_getitem_intindex_1d_slice_min():
+def test_getitem_slice_1d_min():
     x = nt.tensor([1, 3, 4, 5, 6, 9])
     assert x[:3].tolist() == [1, 3, 4]
 
 
-def test_getitem_intindex_1d_slice_max():
+def test_getitem_slice_1d_max():
     x = nt.tensor([1, 3, 4, 5, 6, 9])
     assert x[3:].tolist() == [5, 6, 9]
 
 
-def test_getitem_intindex_1d_slice_rev():
+def test_getitem_slice_1d_rev():
     x = nt.tensor([1, 3, 4, 5, 6, 9])
     assert x[::-1].tolist() == [9, 6, 5, 4, 3, 1]
+
+
+def test_getitem_newaxis_1d_0():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[None, :].tolist() == [[1, 3, 4, 5, 6, 9]]
+
+
+def test_getitem_newaxis_1d_1():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[:, None].tolist() == [[1], [3], [4], [5], [6], [9]]
+
+
+def test_getitem_newaxis_1d_01():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[None, :, None].tolist() == [[[1], [3], [4], [5], [6], [9]]]
 
 
 def test_getitem_intindex_2d():

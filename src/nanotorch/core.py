@@ -2,12 +2,13 @@
 
 import math
 from enum import Enum
+from typing import NamedTuple, Sequence
 
 from nanotorch import _C
 
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
-TensorIndex = int | slice  # TODO: advanced indexing
+TensorIndex = int | slice | Sequence[bool | int] | None
 
 MAX_TENSOR_LEVEL = 32
 
@@ -154,50 +155,43 @@ class Tensor:
         return self._shape[0]
 
     def __getitem__(self, index: TensorIndex | tuple[TensorIndex, ...]) -> "Tensor":
-        if self.ndim == 0:
-            raise IndexError("Cannot index a scalar value.")
-
         if not isinstance(index, tuple):
             index = (index,)
-
-        if len(index) > self.ndim:
+        if self.ndim == 0:
+            raise IndexError("Cannot index a scalar value.")
+        if len([x for x in index if x is not None]) > self.ndim:
             raise IndexError(f"Too many indices ({len(index)}) for {self.ndim}D array.")
 
-        offset = self._offset
-        shape: list[int] = []
-        strides: list[int] = []
+        shape, strides, offset, new_index = _newview_indexing(
+            index, self.shape, self._strides, self._offset
+        )
 
-        for dim in range(self.ndim):
-            if dim >= len(index):
-                shape.append(self.shape[dim])
-                strides.append(self._strides[dim])
-                continue
+        if _is_newview_indexing(index):
+            # New view, same storage
+            return Tensor.init_from_components(
+                dtype=self.dtype,
+                shape=shape,
+                flat_data=self._data,
+                strides=strides,
+                offset=offset,
+            )
 
-            sel = index[dim]
-            nelem = self.shape[dim]
-            if isinstance(sel, int):
-                if sel < 0:
-                    sel += nelem
-                if sel < 0 or sel >= nelem:
-                    raise IndexError(
-                        f"Cannot index at position {sel} in {nelem} elements."
-                    )
-                offset += sel * self._strides[dim]
-            elif isinstance(sel, slice):
-                start, stop, step = sel.indices(nelem)
-                length = len(range(start, stop, step))
-                shape.append(length)
-                strides.append(self._strides[dim] * step)
-                offset += start * self._strides[dim]
-            else:
-                raise ValueError(f"Unhandle index type: {type(sel)}.")
-
+        # Sequence/masked axes necessitate mem copy
+        fa = _get_fancy_axes(shape, strides, offset, new_index)
+        new_data = _C._gather_from_indices(
+            self._data,
+            shape,
+            strides,
+            offset,
+            fa.index_arrays,
+            fa.axes,
+        )
         return Tensor.init_from_components(
             dtype=self.dtype,
-            shape=tuple(shape),
-            flat_data=self._data,
-            strides=tuple(strides),
-            offset=offset,
+            shape=fa.shape,
+            flat_data=new_data,
+            strides=None,
+            offset=None,
         )
 
     @property
@@ -424,3 +418,136 @@ def _promote_types(*dtypes: DataType) -> DataType:
             if best_dtype == DataType.FP64:
                 return best_dtype
     return best_dtype or DataType.FP32
+
+
+# Indexing machinery
+
+
+class _FancyAxes(NamedTuple):
+    """Container for _get_fancy_axes helper."""
+
+    shape: TensorShape
+    index_arrays: list[_C.Storage]
+    axes: list[int]
+
+
+def _is_newview_indexing(index: tuple[TensorIndex, ...]) -> bool:
+    """Computes if the indexing can be done without copy."""
+    for idx in index:
+        if not isinstance(idx, (int, slice)) and idx is not None:
+            return False
+    return True
+
+
+def _newview_indexing(
+    index: tuple[TensorIndex, ...],
+    shape: TensorShape,
+    strides: TensorShape,
+    offset: int,
+) -> tuple[TensorShape, TensorShape, int, tuple[TensorIndex, ...]]:
+    """Indexes a new view of the same storage (simple indexing)."""
+    new_shape: list[int] = []
+    new_strides: list[int] = []
+    new_index: list[TensorIndex] = []
+
+    olddim = 0
+    newdim = 0
+    while olddim < len(shape) or newdim < len(index):
+        if (
+            newdim >= len(index)
+            or not isinstance(index[newdim], (int, slice))
+            and index[newdim] is not None
+        ):
+            new_shape.append(shape[olddim])
+            new_strides.append(strides[olddim])
+            new_index.append(olddim)
+            olddim += 1
+            newdim += 1
+            continue
+
+        sel = index[newdim]
+        if sel is None:
+            new_shape.append(1)
+            new_strides.append(0)
+            new_index.append(None)
+            newdim += 1
+        else:
+            nelem = shape[olddim]
+            if isinstance(sel, int):
+                if sel < 0:
+                    sel += nelem
+                if sel < 0 or sel >= nelem:
+                    raise IndexError(
+                        f"Cannot index at position {sel} in {nelem} elements."
+                    )
+                offset += sel * strides[olddim]
+            elif isinstance(sel, slice):
+                start, stop, step = sel.indices(nelem)
+                length = len(range(start, stop, step))
+                new_shape.append(length)
+                new_strides.append(strides[olddim] * step)
+                new_index.append(None)
+                offset += start * strides[olddim]
+            else:
+                raise ValueError(f"Unhandle index type: {type(sel)}.")
+            olddim += 1
+            newdim += 1
+
+    return tuple(new_shape), tuple(new_strides), offset, tuple(new_index)
+
+
+def _get_fancy_axes(
+    shape: TensorShape,
+    strides: TensorShape,
+    offset: int,
+    index: tuple[TensorIndex, ...],
+) -> _FancyAxes:
+    """Compute fancy axes characteristics."""
+    new_shape: list[int] = []
+    new_strides: list[int] = []
+    indarrs: list[_C.Storage] = []
+    axes: list[int] = []
+    for dim in range(len(shape)):
+        # Non-fancy axis, skip
+        if dim >= len(index) or isinstance(index[dim], (int, slice)):
+            new_shape.append(shape[dim])
+            new_strides.append(strides[dim])
+            continue
+
+        # Fancy axis (integer-based or boolean mask)
+        selector = index[dim]
+        if not isinstance(selector, Sequence):
+            raise IndexError(f"Unexpected selector type {type(selector)}")
+        is_bool: bool | None = None
+        indices = []
+        for i, elem in enumerate(selector):
+            if isinstance(elem, bool):
+                if is_bool is False:
+                    raise IndexError("Mixed bool and non-bool indices.")
+                is_bool = True
+                if elem:
+                    indices.append(i)
+            elif isinstance(elem, int):
+                if is_bool is True:
+                    raise IndexError("Mixed bool and non-bool indices.")
+                is_bool = False
+                indices.append(elem)
+        if is_bool and len(selector) != shape[dim]:
+            raise IndexError(
+                f"Boolean vector mask on dim {dim} does not match dimension size "
+                f"({len(selector)} != {shape[dim]})."
+            )
+
+        new_shape.append(len(indices))
+        new_indarr = _C.zeros((len(indices),), _C.Dtype.Int64)
+        view = memoryview(new_indarr)
+        for i, idx in enumerate(indices):
+            view[i] = idx
+        indarrs.append(new_indarr)
+        axes.append(dim)
+
+    return _FancyAxes(
+        shape=tuple(new_shape),
+        index_arrays=indarrs,
+        axes=axes,
+    )
