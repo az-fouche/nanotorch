@@ -316,6 +316,12 @@ def test_getitem_intindex_0d():
         x[0]
 
 
+def test_getitem_intindex_toomany_d():
+    x = nt.tensor([0.0, 1.0, 2.0])
+    with pytest.raises(IndexError):
+        x[0, 0]
+
+
 def test_getitem_intindex_1d():
     x = nt.tensor([6, 5, 4, 3, 2, 1])
     for i in range(6):
@@ -338,6 +344,26 @@ def test_getitem_intindex_1d_wrap_oob():
     x = nt.tensor([6, 5, 4, 3, 2, 1])
     with pytest.raises(IndexError):
         x[-7]
+
+
+def test_getitem_intindex_1d_slice():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[2:5].tolist() == [4, 5, 6]
+
+
+def test_getitem_intindex_1d_slice_min():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[:3].tolist() == [1, 3, 4]
+
+
+def test_getitem_intindex_1d_slice_max():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[3:].tolist() == [5, 6, 9]
+
+
+def test_getitem_intindex_1d_slice_rev():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    assert x[::-1].tolist() == [9, 6, 5, 4, 3, 1]
 
 
 def test_getitem_intindex_2d():
@@ -366,6 +392,15 @@ def test_getitem_intindex_2d_wrap_oob():
         x[-4]
 
 
+def test_getitem_slice_2d():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[0:2].tolist() == [[1, 2, 3, 4], [5, 6, 7, 8]]
+    assert x[1:, 2:].tolist() == [[7, 8], [11, 12]]
+    assert x[2, 1].tolist() == 10
+    assert x[1, 2:].tolist() == [7, 8]
+    assert x[1, ::-1].tolist() == [8, 7, 6, 5]
+
+
 def test_getitem_intindex_2d_transpose():
     x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]]).T
     assert x[0].tolist() == [1, 5, 9]
@@ -384,9 +419,12 @@ def test_getitem_intindex_2d_reshape():
     assert x[5].tolist() == [11, 12]
 
 
-def test_getitem_intindex_3d():
+def test_getitem_3d():
     x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
     assert x[0].tolist() == [[1, 2], [3, 4]]
+    assert x[0, 1, 1].tolist() == 4
+    assert x[0, :, 1].tolist() == [2, 4]
+    assert x[:, 1, :].tolist() == [[3, 4], [7, 8]]
 
 
 def test_getitem_chained_3d():

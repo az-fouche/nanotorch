@@ -7,6 +7,7 @@ from nanotorch import _C
 
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
+TensorIndex = int | slice  # TODO: advanced indexing
 
 MAX_TENSOR_LEVEL = 32
 
@@ -124,11 +125,14 @@ class Tensor:
 
         strides = _infer_strides(shape) if strides is None else strides
         offset = 0 if offset is None else offset
+        min_index = offset + sum(
+            (s - 1) * st for s, st in zip(shape, strides) if st < 0
+        )
         max_index = offset + sum(
-            (s - 1) * abs(st) for s, st in zip(shape, strides) if s > 0
+            (s - 1) * st for s, st in zip(shape, strides) if st > 0
         )
         max_storage = len(memoryview(flat_data))
-        if math.prod(shape) > 0 and max_index >= max_storage:
+        if math.prod(shape) > 0 and (min_index < 0 or max_index >= max_storage):
             raise IndexError(
                 f"View max index {max_index} exceeds storage capacity {max_storage}."
             )
@@ -149,20 +153,50 @@ class Tensor:
             return 0
         return self._shape[0]
 
-    def __getitem__(self, index: int) -> "Tensor":
-        if index < 0:
-            index = len(self) + index
-        if len(self.shape) == 0 or index < 0 or index >= len(self):
-            raise IndexError(
-                f"Cannot access index {index} in tensor of shape {self.shape}."
-            )
-        shape = self.shape[1:]
-        offset = self._offset + self._strides[0] * index
+    def __getitem__(self, index: TensorIndex | tuple[TensorIndex, ...]) -> "Tensor":
+        if self.ndim == 0:
+            raise IndexError("Cannot index a scalar value.")
+
+        if not isinstance(index, tuple):
+            index = (index,)
+
+        if len(index) > self.ndim:
+            raise IndexError(f"Too many indices ({len(index)}) for {self.ndim}D array.")
+
+        offset = self._offset
+        shape: list[int] = []
+        strides: list[int] = []
+
+        for dim in range(self.ndim):
+            if dim >= len(index):
+                shape.append(self.shape[dim])
+                strides.append(self._strides[dim])
+                continue
+
+            sel = index[dim]
+            nelem = self.shape[dim]
+            if isinstance(sel, int):
+                if sel < 0:
+                    sel += nelem
+                if sel < 0 or sel >= nelem:
+                    raise IndexError(
+                        f"Cannot index at position {sel} in {nelem} elements."
+                    )
+                offset += sel * self._strides[dim]
+            elif isinstance(sel, slice):
+                start, stop, step = sel.indices(nelem)
+                length = len(range(start, stop, step))
+                shape.append(length)
+                strides.append(self._strides[dim] * step)
+                offset += start * self._strides[dim]
+            else:
+                raise ValueError(f"Unhandle index type: {type(sel)}.")
+
         return Tensor.init_from_components(
             dtype=self.dtype,
-            shape=shape,
+            shape=tuple(shape),
             flat_data=self._data,
-            strides=self._strides[1:],
+            strides=tuple(strides),
             offset=offset,
         )
 
