@@ -92,6 +92,13 @@ class DataType(Enum):
         return self in (DataType.FP32, DataType.FP64)
 
 
+bool_ = DataType.BOOL
+int32 = DataType.INT32
+int64 = DataType.INT64
+float32 = DataType.FP32
+float64 = DataType.FP64
+
+
 class Tensor:
     """Base tensor class.
 
@@ -187,7 +194,7 @@ class Tensor:
             index, self.shape, self._strides, self._offset
         )
 
-        if _is_newview_indexing(index):
+        if _is_contiguous_view(index):
             # New view, same storage
             return Tensor.init_from_components(
                 dtype=self.dtype,
@@ -198,7 +205,7 @@ class Tensor:
             )
 
         # Sequence/masked axes necessitate mem copy
-        fa = _get_fancy_axes(shape, strides, offset, new_index)
+        fa = _get_fancy_axes(shape, strides, new_index)
         new_data = _C._gather_from_indices(
             self._data,
             shape,
@@ -472,7 +479,7 @@ class _FancyAxes(NamedTuple):
     axes: list[int]
 
 
-def _is_newview_indexing(index: tuple[TensorIndex, ...]) -> bool:
+def _is_contiguous_view(index: tuple[TensorIndex, ...]) -> bool:
     """Computes if the indexing can be done without copy."""
     for idx in index:
         if not isinstance(idx, (int, slice)) and idx is not None:
@@ -540,7 +547,6 @@ def _newview_indexing(
 def _get_fancy_axes(
     shape: TensorShape,
     strides: TensorShape,
-    offset: int,
     index: tuple[TensorIndex, ...],
 ) -> _FancyAxes:
     """Compute fancy axes characteristics."""
