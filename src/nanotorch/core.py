@@ -2,13 +2,14 @@
 
 import math
 from enum import Enum
+from types import EllipsisType
 from typing import Any, NamedTuple, Sequence
 
 from nanotorch import _C
 
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
-TensorIndex = int | slice | Sequence[bool | int] | None
+TensorIndex = int | slice | Sequence[bool | int] | EllipsisType | None
 
 MAX_TENSOR_LEVEL = 32
 
@@ -189,6 +190,7 @@ class Tensor:
             raise IndexError("Cannot index a scalar value.")
         if len([x for x in index if x is not None]) > self.ndim:
             raise IndexError(f"Too many indices ({len(index)}) for {self.ndim}D array.")
+        index = _expand_ellipsis(index, self.shape)
 
         shape, strides, offset, new_index = _newview_indexing(
             index, self.shape, self._strides, self._offset
@@ -477,6 +479,32 @@ class _FancyAxes(NamedTuple):
     shape: TensorShape
     index_arrays: list[_C.Storage]
     axes: list[int]
+
+
+def _expand_ellipsis(
+    index: tuple[TensorIndex, ...], shape: TensorShape
+) -> tuple[TensorIndex, ...]:
+    """Expands ellipsis into slice [..., 0] -> [:, :, :, 0]"""
+    if len(index) == 0:
+        return ()
+    if sum(isinstance(i, EllipsisType) for i in index) > 1:
+        raise IndexError("Multiple ellipses detected.")
+    ndim = len(shape)
+    nind = sum(i is not None for i in index)
+    if isinstance(index[0], EllipsisType):
+        return tuple([slice(None)] * (ndim - nind + 1) + list(index[1:]))
+    if isinstance(index[-1], EllipsisType):
+        return tuple(list(index[:-1]) + [slice(None)] * (ndim - nind + 1))
+    pointer = 0
+    index_exp: list[TensorIndex] = []
+    while pointer < len(index):
+        elem = index[pointer]
+        if not isinstance(elem, EllipsisType):
+            index_exp.append(elem)
+        else:
+            index_exp.extend([slice(None)] * (ndim - nind + 1))
+        pointer += 1
+    return tuple(index_exp)
 
 
 def _is_contiguous_view(index: tuple[TensorIndex, ...]) -> bool:

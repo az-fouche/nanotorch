@@ -23,76 +23,26 @@ def test_tolist_extensive():
 # Sum
 
 
-@pytest.mark.parametrize("input,expected_v,expected_t", [([], 0.0, nt.float32)])
-def test_tensor_sum(input, expected_v, expected_t):
-    x = nt.tensor(input)
-    assert x.sum().tolist() == expected_v
-    assert x.sum().dtype == expected_t
-
-
-def test_tensor_sum_0d():
-    x = nt.tensor(2.0)
-    assert x.sum().tolist() == 2.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_1d():
-    x = nt.tensor([1.0, 2.0, 3.0])
-    assert x.sum().tolist() == 6.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_2d():
-    x = nt.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-    assert x.sum().tolist() == 21.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_3d():
-    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
-    assert x.sum().tolist() == 36.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_negatives():
-    x = nt.tensor([1.0, 2.0, -3.0])
-    assert x.sum().tolist() == 0.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_all_negatives():
-    x = nt.tensor([-1.0, -2.0, -3.0])
-    assert x.sum().tolist() == -6.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_bool():
-    x = nt.tensor([True, True, False, True], dtype=nt.bool_)
-    assert x.sum().tolist() == 3.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_int32():
-    x = nt.tensor([1, 7, 0, 8], dtype=nt.int32)
-    assert x.sum().tolist() == 16.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_int64():
-    x = nt.tensor([1, 7, 0, 8], dtype=nt.int64)
-    assert x.sum().tolist() == 16.0
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_fp32():
-    x = nt.tensor([1.5, 7.5, -1.5, 8.0], dtype=nt.float32)
-    assert x.sum().tolist() == 15.5
-    assert x.sum().dtype == nt.float32
-
-
-def test_tensor_sum_fp64():
-    x = nt.tensor([1.5, 7.5, -1.5, 8.0], dtype=nt.float64)
-    assert x.sum().tolist() == 15.5
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        (([],), 0.0),
+        ((2.0,), 2.0),
+        (([1.0, 2.0, 3.0],), 6.0),
+        (([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],), 21.0),
+        (([[[1, 2], [3, 4]], [[5, 6], [7, 8]]],), 36.0),
+        (([1.0, 2.0, -3.0],), 0.0),
+        (([-1.0, -2.0, -3.0],), -6.0),
+        (([True, True, False, True],), 3.0),
+        (([1, 7, 0, 8], nt.int32), 16.0),
+        (([1, 7, 0, 8], nt.int64), 16.0),
+        (([1.5, 7.5, -1.5, 8.0], nt.float32), 15.5),
+        (([1.5, 7.5, -1.5, 8.0], nt.float64), 15.5),
+    ],
+)
+def test_tensor_sum(input, expected):
+    x = nt.tensor(*input)
+    assert x.sum().tolist() == expected
     assert x.sum().dtype == nt.float32
 
 
@@ -262,45 +212,31 @@ def test_tensor_not_contiguous_to_contiguous():
 # Reshape
 
 
+@pytest.mark.parametrize(
+    "input,shape,expected",
+    [
+        (0.0, (1,), [0.0]),
+        ([1, 2, 3, 4, 5, 6], (2, 3), [[1, 2, 3], [4, 5, 6]]),
+        ([1, 2, 3, 4, 5, 6, 7, 8], (2, 2, 2), [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]),
+        ([1, 2, 3, 4, 5, 6], (1, 6), [[1, 2, 3, 4, 5, 6]]),
+        ([[1, 2, 3], [4, 5, 6]], (6,), [1, 2, 3, 4, 5, 6]),
+        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], (8,), [1, 2, 3, 4, 5, 6, 7, 8]),
+    ],
+)
+def test_reshape(input, shape, expected):
+    x = nt.tensor(input)
+    assert x.reshape(*shape).tolist() == expected
+
+
 def test_reshape_empty():
     x = nt.tensor([1, 2, 3])
     with pytest.raises(ValueError):
         x.reshape()
 
 
-def test_reshape_0d():
-    x = nt.tensor(0.0)
-    assert x.reshape(1).tolist() == [0.0]
-
-
 def test_reshape_1d_identity():
     x = nt.tensor([1, 2, 3])
     assert x.reshape(3) is x
-
-
-def test_reshape_1d_2d():
-    x = nt.tensor([1, 2, 3, 4, 5, 6])
-    assert x.reshape(2, 3).tolist() == [[1, 2, 3], [4, 5, 6]]
-
-
-def test_reshape_1d_3d():
-    x = nt.tensor([1, 2, 3, 4, 5, 6, 7, 8])
-    assert x.reshape(2, 2, 2).tolist() == [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
-
-
-def test_reshape_1d_d1():
-    x = nt.tensor([1, 2, 3, 4, 5, 6])
-    assert x.reshape(1, 6).tolist() == [[1, 2, 3, 4, 5, 6]]
-
-
-def test_reshape_2d_1d():
-    x = nt.tensor([[1, 2, 3], [4, 5, 6]])
-    assert x.reshape(6).tolist() == [1, 2, 3, 4, 5, 6]
-
-
-def test_reshape_3d_1d():
-    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
-    assert x.reshape(8).tolist() == [1, 2, 3, 4, 5, 6, 7, 8]
 
 
 def test_reshape_no_contiguous():
@@ -352,6 +288,15 @@ def test_getitem_slice_1d():
     assert x[2:5].tolist() == [4, 5, 6]
 
 
+def test_getitem_slice_1d_aliasing():
+    x = nt.tensor([1, 3, 4, 5, 6, 9])
+    y = x[1:3]
+    assert y.tolist() == [3, 4]
+    data = memoryview(x._data)
+    data[1] = 12
+    assert y.tolist() == [12, 4]
+
+
 def test_getitem_slice_1d_min():
     x = nt.tensor([1, 3, 4, 5, 6, 9])
     assert x[:3].tolist() == [1, 3, 4]
@@ -387,6 +332,8 @@ def test_getitem_intindex_2d():
     assert x[0].tolist() == [1, 2, 3, 4]
     assert x[1].tolist() == [5, 6, 7, 8]
     assert x[2].tolist() == [9, 10, 11, 12]
+    assert x[0, 0].tolist() == 1
+    assert x[0, 0].ndim == 0
 
 
 def test_getitem_intindex_2d_oob():
@@ -441,11 +388,50 @@ def test_getitem_3d():
     assert x[0, 1, 1].tolist() == 4
     assert x[0, :, 1].tolist() == [2, 4]
     assert x[:, 1, :].tolist() == [[3, 4], [7, 8]]
+    assert x[:, None, :, None].tolist() == [
+        [[[[1, 2]], [[3, 4]]]],
+        [[[[5, 6]], [[7, 8]]]],
+    ]
 
 
 def test_getitem_chained_3d():
     x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
     assert x[1][1][0].tolist() == 7
+
+
+def test_getitem_slice_advanced():
+    x = nt.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    assert x[::2].tolist() == [0, 2, 4, 6]
+    assert x[1::2].tolist() == [1, 3, 5, 7]
+    assert x[1:5:2].tolist() == [1, 3]
+    assert x[2:2].tolist() == []
+    assert x[10:5].tolist() == []
+    assert x[-3:-1].tolist() == [5, 6]
+    assert x[-3::-1].tolist() == [5, 4, 3, 2, 1, 0]
+    assert x[0:100].tolist() == [0, 1, 2, 3, 4, 5, 6, 7]
+    assert x[1:4][1:2].tolist() == [2]
+
+
+def test_getitem_empty():
+    x = nt.tensor([0, 1, 2, 3, 4, 5, 6, 7])
+    assert x[()] is not x
+    assert x[()].tolist() == [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+def test_getitem_ellipsis():
+    x = nt.tensor([[[[1, 2], [3, 4]], [[5, 6], [7, 8]]]])
+    assert x[...].tolist() == x.tolist()
+    assert x[..., 0].tolist() == x[:, :, :, 0].tolist()
+    assert x[..., 0, None].tolist() == x[:, :, :, 0, None].tolist()
+    assert x[0, ...].tolist() == x[0, :, :, :].tolist()
+    assert x[0, ..., 0].tolist() == x[0, :, :, 0].tolist()
+    assert x[0, ..., None, 0].tolist() == x[0, :, :, None, 0].tolist()
+
+
+def test_getitem_ellipsis_multi_raises():
+    x = nt.tensor([[[[1, 2], [3, 4]], [[5, 6], [7, 8]]]])
+    with pytest.raises(IndexError):
+        x[..., 0, ...]
 
 
 # Weird cases
