@@ -109,12 +109,12 @@ std::shared_ptr<Storage> _binary_op_generic(
     auto s2 = x2.storage;
     if (s1->dtype() != s2->dtype())
         throw std::invalid_argument(
-            "equals: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
+            "_binary_op_generic: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
             +  " and " + dtype_to_format(s2->dtype()) + "."
         );
     if (x1.shape != x2.shape)
         throw std::invalid_argument(
-            "equals: expected same size tensors, got " + vec_to_string(x1.shape)
+            "_binary_op_generic: expected same size tensors, got " + vec_to_string(x1.shape)
             +  " and " + vec_to_string(x2.shape) + "."
         );
 

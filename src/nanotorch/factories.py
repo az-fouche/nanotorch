@@ -2,7 +2,7 @@
 
 from nanotorch import _C
 
-from . import core as ntcore
+from . import _data_type as dt
 from .core import DataType, InputType, Tensor, TensorShape
 
 
@@ -11,48 +11,38 @@ def tensor(data: InputType, dtype: DataType | None = None) -> Tensor:
     return Tensor(data, dtype)
 
 
-def zeros(shape: int | TensorShape, dtype: DataType = ntcore.float32) -> Tensor:
+def zeros(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
     """Initialize a new tensor filled with zeros."""
     if isinstance(shape, int):
         shape = (shape,)
-    return Tensor.init_from_components(
-        dtype, shape, _C.zeros(shape, dtype.cpp_dtype), None, None
-    )
+    return Tensor._new_contiguous(dtype, shape, _C.zeros(shape, dtype.cpp_dtype))
 
 
-def ones(shape: int | TensorShape, dtype: DataType = ntcore.float32) -> Tensor:
+def ones(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
     """Initialize a new tensor filled with ones."""
     if isinstance(shape, int):
         shape = (shape,)
-    return Tensor.init_from_components(
-        dtype, shape, _C.ones(shape, dtype.cpp_dtype), None, None
-    )
+    return Tensor._new_contiguous(dtype, shape, _C.ones(shape, dtype.cpp_dtype))
 
 
 def full(
     shape: int | TensorShape,
     value: bool | int | float,
-    dtype: DataType = ntcore.float32,
+    dtype: DataType = dt.float32,
 ) -> Tensor:
     """Initialize a new tensor filled with set value."""
     if isinstance(shape, int):
         shape = (shape,)
-    return Tensor.init_from_components(
-        dtype, shape, _C.full(shape, value, dtype.cpp_dtype), None, None
-    )
+    return Tensor._new_contiguous(dtype, shape, _C.full(shape, value, dtype.cpp_dtype))
 
 
-def eye(n: int, dtype: DataType = ntcore.float32) -> Tensor:
+def eye(n: int, dtype: DataType = dt.float32) -> Tensor:
     """Initialize a new eye square tensor."""
-    return Tensor.init_from_components(
-        dtype, (n, n), _C.eye(n, dtype.cpp_dtype), None, None
-    )
+    return Tensor._new_contiguous(dtype, (n, n), _C.eye(n, dtype.cpp_dtype))
 
 
-def arange(
-    n: int, start: int = 0, step: int = 1, dtype: DataType = ntcore.int64
-) -> Tensor:
+def arange(n: int, start: int = 0, step: int = 1, dtype: DataType = dt.int64) -> Tensor:
     """Initialize a new tensor containing an arithmetic range."""
-    return Tensor.init_from_components(
-        dtype, (n,), _C.arange(n, start, step, dtype.cpp_dtype), None, None
+    return Tensor._new_contiguous(
+        dtype, (n,), _C.arange(n, start, step, dtype.cpp_dtype)
     )

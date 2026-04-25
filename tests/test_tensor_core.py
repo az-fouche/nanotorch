@@ -447,7 +447,7 @@ def test_getitem_advanced_broadcast_tensor():
 
 def test_getitem_advanced_broadcast_error():
     x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
-    with pytest.raises(IndexError):
+    with pytest.raises(ValueError):
         x[[1, 2, 1], [1, 1, 0, 1]]
 
 
