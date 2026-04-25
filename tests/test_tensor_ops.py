@@ -434,6 +434,67 @@ def test_getitem_ellipsis_multi_raises():
         x[..., 0, ...]
 
 
+def test_getitem_advanced_simple():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[1, 2]].tolist() == [[5, 6, 7, 8], [9, 10, 11, 12]]
+
+
+def test_getitem_advanced_neg():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[-2, -1]].tolist() == [[5, 6, 7, 8], [9, 10, 11, 12]]
+
+
+def test_getitem_advanced_mixed():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[:, [1, 2]].tolist() == [[2, 3], [6, 7], [10, 11]]
+
+
+def test_getitem_advanced_oob():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    with pytest.raises(IndexError):
+        x[3]
+
+
+def test_getitem_advanced_empty():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[]].tolist() == []
+    assert x[[]].shape == (0, 4)
+
+
+def test_getitem_advanced_broadcast():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[1, 2, 1], [1, 1, 0]].tolist() == [6, 10, 5]
+
+
+def test_getitem_advanced_broadcast_error():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    with pytest.raises(IndexError):
+        x[[1, 2, 1], [1, 1, 0, 1]]
+
+
+def test_getitem_advanced_broadcast_implicit_l():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[1, 2, 1], [1]].tolist() == [6, 10, 6]
+
+
+def test_getitem_advanced_broadcast_implicit_r():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[1], [1, 2, 1]].tolist() == [6, 7, 6]
+
+
+def test_getitem_advanced_2dindexing():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    assert x[[[0, 1], [1, 2]]].tolist() == [
+        [[1, 2, 3, 4], [5, 6, 7, 8]],
+        [[5, 6, 7, 8], [9, 10, 11, 12]],
+    ]
+
+
+def test_getitem_advanced_broadcast_3d():
+    x = nt.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]])
+    assert x[[1, 1], :, [1, 0]].tolist() == [[6, 8], [5, 7]]
+
+
 # Weird cases
 
 

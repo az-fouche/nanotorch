@@ -27,6 +27,15 @@ class Storage(Buffer):
     def clone(self) -> "Storage": ...
     def cast(self, dtype: Dtype) -> "Storage": ...
 
+class TensorView:
+    def __init__(
+        self,
+        storage: Storage,
+        shape: tuple[int, ...],
+        strides: tuple[int, ...],
+        offset: int,
+    ) -> None: ...
+
 # Factories
 def zeros(shape: tuple[int, ...], dtype: Dtype) -> "Storage": ...
 def ones(shape: tuple[int, ...], dtype: Dtype) -> "Storage": ...
@@ -39,24 +48,16 @@ def arange(n: int, start: int, step: int, dtype: Dtype) -> "Storage": ...
 # Ops
 # s: storage / sh: shape / st: strides / of: offset
 def cast(s: Storage, dtype: Dtype) -> Storage: ...
-def equals(
-    s1: Storage,
-    sh1: tuple[int, ...],
-    st1: tuple[int, ...],
-    of1: int,
-    s2: Storage,
-    sh2: tuple[int, ...],
-    st2: tuple[int, ...],
-    of2: int,
-) -> bool: ...
-def sum(s: Storage, sh: tuple[int, ...], st: tuple[int, ...], of: int) -> float: ...
+def equals(x: TensorView, y: TensorView) -> bool: ...
+def sum(x: TensorView) -> float: ...
 
 # Core ops
-def _gather_from_indices(
-    s: Storage,
-    sh: tuple[int, ...],
-    st: tuple[int, ...],
-    of: int,
-    index_arrays: Sequence[Storage],
-    fancy_axes: Sequence[int],
+def gather_from_axes(
+    *,
+    x: TensorView,
+    new_sh: tuple[int, ...],
+    fancy_dims_in_src: Sequence[int],
+    fancy_dims_data: Sequence[TensorView],
+    out_axis_is_fancy: Sequence[bool],
+    out_axis_target: Sequence[int],
 ) -> Storage: ...

@@ -9,7 +9,7 @@ from nanotorch import _C
 
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
-TensorIndex = int | slice | Sequence[bool | int] | EllipsisType | None
+TensorIndex = int | slice | Sequence[bool | int | Sequence[int]] | EllipsisType | None
 
 MAX_TENSOR_LEVEL = 32
 
@@ -207,18 +207,24 @@ class Tensor:
             )
 
         # Sequence/masked axes necessitate mem copy
-        fa = _get_fancy_axes(shape, strides, new_index)
-        new_data = _C._gather_from_indices(
-            self._data,
-            shape,
-            strides,
-            offset,
-            fa.index_arrays,
-            fa.axes,
+        fax = _get_fancy_axes(shape, new_index)
+        new_data = _C.gather_from_axes(
+            x=Tensor.init_from_components(
+                self.dtype,
+                shape,
+                self._data,
+                strides,
+                offset,
+            )._C_tensor_view(),
+            new_sh=fax.new_shape,
+            fancy_dims_in_src=fax.fancy_dims_in_src,
+            fancy_dims_data=[t._C_tensor_view() for t in fax.fancy_dims_data],
+            out_axis_is_fancy=fax.out_axis_is_fancy,
+            out_axis_target=fax.out_axis_target,
         )
         return Tensor.init_from_components(
             dtype=self.dtype,
-            shape=fa.shape,
+            shape=fax.new_shape,
             flat_data=new_data,
             strides=None,
             offset=None,
@@ -303,13 +309,35 @@ class Tensor:
             self._offset,
         )
 
+    def expand(self, shape: TensorShape) -> "Tensor":
+        """Expand the tensor to target shape, no copy."""
+        if len(shape) < self.ndim:
+            raise ValueError(f"Cannot broadcast {self.shape} to {shape}.")
+        strides = list(self._strides)
+        for i in range(len(shape)):
+            if i >= self.ndim:
+                strides = [0] + strides
+            else:
+                src, tgt = self.shape[-i - 1], shape[-i - 1]
+                if src == tgt:
+                    continue
+                elif src == 1:
+                    strides[-i - 1] = 0  # broadcast
+                else:
+                    raise ValueError(
+                        f"Cannot broadcast {self.shape} to {shape} (mismatch)."
+                    )
+        return Tensor.init_from_components(
+            self.dtype, shape, self._data, tuple(strides), self._offset
+        )
+
     # Common ops shortcuts
 
     def sum(self) -> "Tensor":
         """Compute per-coef sum of tensor coefficients."""
         if self.is_empty:  # FIXME: strides&offset
             return Tensor(0, dtype=self.dtype)
-        return Tensor(_C.sum(self._data, self.shape, self._strides, self._offset))
+        return Tensor(_C.sum(self._C_tensor_view()))
 
     def equals(self, other: "Tensor") -> bool:
         """Test per-coefficient equality, auto-promotes to best dtype."""
@@ -323,16 +351,7 @@ class Tensor:
             first = self.to(promote_type)
         if promote_type != other.dtype:
             other = other.to(promote_type)
-        return _C.equals(
-            first._data,
-            first.shape,
-            first._strides,
-            first._offset,
-            other._data,
-            other.shape,
-            other._strides,
-            other._offset,
-        )
+        return _C.equals(first._C_tensor_view(), other._C_tensor_view())
 
     def tolist(self) -> InputType:
         """Converts the tensor to a list, preserving shape and type."""
@@ -363,6 +382,10 @@ class Tensor:
         if self._is_contiguous():
             return self
         return Tensor(self.tolist(), self.dtype)
+
+    def _C_tensor_view(self) -> _C.TensorView:
+        """Return a C++-compatible tensor view."""
+        return _C.TensorView(self._data, self.shape, self._strides, self._offset)
 
 
 # Private functions
@@ -476,9 +499,11 @@ def _str_list_compact(li: Any) -> str:
 class _FancyAxes(NamedTuple):
     """Container for _get_fancy_axes helper."""
 
-    shape: TensorShape
-    index_arrays: list[_C.Storage]
-    axes: list[int]
+    new_shape: TensorShape
+    fancy_dims_in_src: list[int]
+    fancy_dims_data: list[Tensor]
+    out_axis_is_fancy: list[bool]
+    out_axis_target: list[int]
 
 
 def _expand_ellipsis(
@@ -529,14 +554,13 @@ def _newview_indexing(
     olddim = 0
     newdim = 0
     while olddim < len(shape) or newdim < len(index):
-        if (
-            newdim >= len(index)
-            or not isinstance(index[newdim], (int, slice))
-            and index[newdim] is not None
+        if newdim >= len(index) or (
+            (not isinstance(index[newdim], (int, slice)))
+            and (index[newdim] is not None)
         ):
             new_shape.append(shape[olddim])
             new_strides.append(strides[olddim])
-            new_index.append(olddim)
+            new_index.append(None if newdim >= len(index) else index[newdim])
             olddim += 1
             newdim += 1
             continue
@@ -572,57 +596,106 @@ def _newview_indexing(
     return tuple(new_shape), tuple(new_strides), offset, tuple(new_index)
 
 
-def _get_fancy_axes(
-    shape: TensorShape,
-    strides: TensorShape,
-    index: tuple[TensorIndex, ...],
-) -> _FancyAxes:
+def _get_fancy_axes(shape: TensorShape, index: tuple[TensorIndex, ...]) -> _FancyAxes:
     """Compute fancy axes characteristics."""
-    new_shape: list[int] = []
-    new_strides: list[int] = []
-    indarrs: list[_C.Storage] = []
-    axes: list[int] = []
+    basic_axes: list[int] = []
+    basic_shape: list[int] = []
+    fancy_axes: list[int] = []
+    indarrs_raw: list[Tensor] = []
+
     for dim in range(len(shape)):
         # Non-fancy axis, skip
-        if dim >= len(index) or isinstance(index[dim], (int, slice)):
-            new_shape.append(shape[dim])
-            new_strides.append(strides[dim])
+        if (
+            dim >= len(index)
+            or index[dim] is None
+            or isinstance(index[dim], (int, slice))
+        ):
+            basic_axes.append(dim)
+            basic_shape.append(shape[dim])
             continue
 
         # Fancy axis (integer-based or boolean mask)
-        selector = index[dim]
-        if not isinstance(selector, Sequence):
-            raise IndexError(f"Unexpected selector type {type(selector)}")
-        is_bool: bool | None = None
-        indices = []
-        for i, elem in enumerate(selector):
-            if isinstance(elem, bool):
-                if is_bool is False:
-                    raise IndexError("Mixed bool and non-bool indices.")
-                is_bool = True
-                if elem:
-                    indices.append(i)
-            elif isinstance(elem, int):
-                if is_bool is True:
-                    raise IndexError("Mixed bool and non-bool indices.")
-                is_bool = False
-                indices.append(elem)
-        if is_bool and len(selector) != shape[dim]:
-            raise IndexError(
-                f"Boolean vector mask on dim {dim} does not match dimension size "
-                f"({len(selector)} != {shape[dim]})."
-            )
+        fancy_index = index[dim]
+        if not isinstance(fancy_index, Sequence):
+            raise IndexError(f"Unexpected selector type {type(fancy_index)}")
+        try:
+            fancy_index = Tensor(fancy_index)  # type: ignore
+        except Exception as e:
+            raise IndexError(f"Could not interpret index {dim} as a Tensor: {e}")
 
-        new_shape.append(len(indices))
-        new_indarr = _C.zeros((len(indices),), _C.Dtype.Int64)
-        view = memoryview(new_indarr)
-        for i, idx in enumerate(indices):
-            view[i] = idx
-        indarrs.append(new_indarr)
-        axes.append(dim)
+        # TODO: do it index-based once implemented
+        content = memoryview(fancy_index._data)
+        for i in range(len(content)):
+            if content[i] < 0:
+                content[i] = content[i] % shape[dim]
+
+        if fancy_index.dtype == DataType.BOOL:
+            if fancy_index.ndim > 1:
+                raise NotImplementedError("nD boolean masks not here (yet).")
+            indices = [i for i, b in enumerate(content) if b]
+            fancy_index = Tensor(indices)
+
+        fancy_axes.append(dim)
+        indarrs_raw.append(fancy_index)
+
+    indarr_shape = _broadcast_shapes(*(t.shape for t in indarrs_raw))
+    indarrs = [t.expand(indarr_shape) for t in indarrs_raw]
+
+    # compute new shape and axes plan
+    nfancy = len(fancy_axes)
+    nidx = len(indarr_shape)
+    axes_diff = [fancy_axes[i + 1] - fancy_axes[i] for i in range(nfancy - 1)]
+
+    is_fancy = []
+    fancy_target = []
+    if nfancy > 0 and any(d != 1 for d in axes_diff):  # Not contiguous case
+        new_shape = tuple(list(indarr_shape) + basic_shape)
+        for i in range(len(new_shape)):
+            if i < nidx:
+                is_fancy.append(True)
+                fancy_target.append(i)
+            else:
+                is_fancy.append(False)
+                fancy_target.append(basic_axes[i - nidx])
+    else:
+        a0 = fancy_axes[0]
+        new_shape = tuple(basic_shape[:a0] + list(indarr_shape) + basic_shape[a0:])
+        for i in range(len(new_shape)):
+            if i < a0:
+                is_fancy.append(False)
+                fancy_target.append(basic_axes[i])
+            elif i < a0 + nidx:
+                is_fancy.append(True)
+                fancy_target.append(i - a0)
+            else:
+                is_fancy.append(False)
+                fancy_target.append(basic_axes[i - nidx])
 
     return _FancyAxes(
-        shape=tuple(new_shape),
-        index_arrays=indarrs,
-        axes=axes,
+        new_shape=new_shape,
+        fancy_dims_data=indarrs,
+        fancy_dims_in_src=fancy_axes,
+        out_axis_is_fancy=is_fancy,
+        out_axis_target=fancy_target,
     )
+
+
+def _broadcast_shapes(*shapes: TensorShape) -> TensorShape:
+    """Broadcast to the smallest compatible shape, raises if not possible."""
+    if not shapes:
+        return tuple()
+    final_shape = list(shapes[0])
+    for s in shapes[1:]:
+        ldiff = len(final_shape) - len(s)
+        if ldiff > 0:
+            s = [1] * ldiff + list(s)
+        elif ldiff < 0:
+            final_shape = [1] * -ldiff + final_shape
+        for i in range(len(final_shape)):
+            if final_shape[i] == 1:
+                final_shape[i] = s[i]
+            elif s[i] == 1:
+                continue
+            elif final_shape[i] != s[i]:
+                raise IndexError(f"Cannot broadcast shapes {s} and {final_shape}.")
+    return tuple(final_shape)
