@@ -74,6 +74,96 @@ std::shared_ptr<Storage> arange(py::ssize_t n, Dtype dtype) {
 
 // Ops
 
+double sum(const TensorView& x) {
+    auto storage = x.storage;
+    auto n_axes = static_cast<py::ssize_t>(x.shape.size());
+    auto numel = numel_from_shape(x.shape);
+    return dispatch_dtype(storage->dtype(), [&]<typename T>() {
+        auto data = static_cast<const T*>(storage->data());
+        double result = 0;
+        std::vector<py::ssize_t> loc(n_axes);
+        for (py::ssize_t i = 0; i < numel; ++i) {
+            // Add value at loc
+            py::ssize_t idx = x.offset;
+            for (py::ssize_t j = 0; j < n_axes; ++j) idx += x.strides[j] * loc[j];
+            result += data[idx];
+
+            // Loc update
+            py::ssize_t j = n_axes - 1;
+            while (j >= 0) { 
+                loc[j] += 1;
+                if (loc[j] < x.shape[j]) break;
+                loc[j] = 0;
+                j -= 1;
+            }
+        }
+        return result;
+    });
+}
+
+template <typename F>
+std::shared_ptr<Storage> _binary_op_generic(
+    const TensorView& x1, const TensorView& x2, F&& func
+) {
+    auto s1 = x1.storage;
+    auto s2 = x2.storage;
+    if (s1->dtype() != s2->dtype())
+        throw std::invalid_argument(
+            "equals: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
+            +  " and " + dtype_to_format(s2->dtype()) + "."
+        );
+    if (x1.shape != x2.shape)
+        throw std::invalid_argument(
+            "equals: expected same size tensors, got " + vec_to_string(x1.shape)
+            +  " and " + vec_to_string(x2.shape) + "."
+        );
+
+    auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
+    auto numel = numel_from_shape(x1.shape);
+    auto new_storage = Storage::allocate(numel, x1.storage->dtype());
+
+    return dispatch_dtype(s1->dtype(), [&]<typename T>() {
+        auto* ptr1 = static_cast<const T*>(s1->data());
+        auto* ptr2 = static_cast<const T*>(s2->data());
+        auto* ptrout = static_cast<T*>(new_storage->data());
+        std::vector<py::ssize_t> loc(n_axes);
+        for (py::ssize_t i = 0; i < numel; ++i) {
+            py::ssize_t idx1 = x1.offset, idx2 = x2.offset;
+            for (py::ssize_t j = 0; j < n_axes; ++j) {
+                idx1 += x1.strides[j] * loc[j];
+                idx2 += x2.strides[j] * loc[j];
+            }
+            ptrout[i] = func(ptr1[idx1], ptr2[idx2]);
+
+            // Loc update
+            py::ssize_t j = n_axes - 1;
+            while (j >= 0) { 
+                loc[j] += 1;
+                if (loc[j] < x1.shape[j]) break;
+                loc[j] = 0;
+                j -= 1;
+            }
+        }
+        return new_storage;
+    });
+}
+
+std::shared_ptr<Storage> add(const TensorView& x1, const TensorView& x2) {
+    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a + b; });
+}
+
+std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2) {
+    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a - b; });
+}
+
+std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2) {
+    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a * b; });
+}
+
+std::shared_ptr<Storage> divide(const TensorView& x1, const TensorView& x2) {
+    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a / b; });
+}
+
 bool equals(const TensorView& x1, const TensorView& x2) {
     auto s1 = x1.storage;
     auto s2 = x2.storage;
@@ -113,33 +203,6 @@ bool equals(const TensorView& x1, const TensorView& x2) {
             }
         }
         return true;
-    });
-}
-
-double sum(const TensorView& x) {
-    auto storage = x.storage;
-    auto n_axes = static_cast<py::ssize_t>(x.shape.size());
-    auto numel = numel_from_shape(x.shape);
-    return dispatch_dtype(storage->dtype(), [&]<typename T>() {
-        auto data = static_cast<const T*>(storage->data());
-        double result = 0;
-        std::vector<py::ssize_t> loc(n_axes);
-        for (py::ssize_t i = 0; i < numel; ++i) {
-            // Add value at loc
-            py::ssize_t idx = x.offset;
-            for (py::ssize_t j = 0; j < n_axes; ++j) idx += x.strides[j] * loc[j];
-            result += data[idx];
-
-            // Loc update
-            py::ssize_t j = n_axes - 1;
-            while (j >= 0) { 
-                loc[j] += 1;
-                if (loc[j] < x.shape[j]) break;
-                loc[j] = 0;
-                j -= 1;
-            }
-        }
-        return result;
     });
 }
 
@@ -342,10 +405,14 @@ void bind_ops_(py::module_& m) {
         "cast", [](const Storage& s, Dtype t) { return s.cast(t); }, 
         "Cast a storage to another dtype.", py::arg("storage"), py::arg("dtype")
     );
+    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"));
+    m.def("add", &add, "Add elements pointwise.", py::arg("x1"), py::arg("x2"));
+    m.def("subtract", &subtract, "Subtract elements pointwise.", py::arg("x1"), py::arg("x2"));
+    m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));
+    m.def("divide", &divide, "Divide elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );
-    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"));
     m.def(
         "copy_view", &copy_view, "Copy source view into target view.", py::arg("src"), py::arg("dst")
     );

@@ -19,10 +19,14 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t st
 std::shared_ptr<Storage> arange(py::ssize_t n, Dtype dtype);
 
 // Common ops
-bool equals(const TensorView& x1, const TensorView& x2);
 double sum(const TensorView& x);
+std::shared_ptr<Storage> add(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> divide(const TensorView& x1, const TensorView& x2);
 
 // Core ops
+bool equals(const TensorView& x1, const TensorView& x2);
 void copy_view(const TensorView& src, const TensorView& dst);
 void scatter_to_axes(
     const TensorView& src, 

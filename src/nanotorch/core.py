@@ -130,7 +130,7 @@ class Tensor:
         flat_data: _C.Storage,
         strides: TensorShape | None,
         offset: int | None,
-    ) -> "Tensor":
+    ) -> Tensor:
         """Intializes a new tensor from precomputed components."""
 
         strides = _infer_strides(shape) if strides is None else strides
@@ -184,7 +184,7 @@ class Tensor:
             return 0
         return self._shape[0]
 
-    def __getitem__(self, index: TensorIndex | tuple[TensorIndex, ...]) -> "Tensor":
+    def __getitem__(self, index: TensorIndex | tuple[TensorIndex, ...]) -> Tensor:
         if not isinstance(index, tuple):
             index = (index,)
         if self.ndim == 0:
@@ -208,10 +208,10 @@ class Tensor:
         # Sequence/masked axes necessitate mem copy
         fax = _get_fancy_axes(view.shape, new_index)
         new_data = _C.gather_from_axes(
-            x=view._C_tensor_view(),
+            x=view._C_view,
             new_sh=fax.new_shape,
             fancy_dims_in_src=fax.fancy_dims_in_src,
-            fancy_dims_data=[t._C_tensor_view() for t in fax.fancy_dims_data],
+            fancy_dims_data=[t._C_view for t in fax.fancy_dims_data],
             out_axis_is_fancy=fax.out_axis_is_fancy,
             out_axis_target=fax.out_axis_target,
         )
@@ -249,7 +249,7 @@ class Tensor:
             if value._data is self._data:  # aliasing guard
                 value = value._to_contiguous()
             _C.copy_view(
-                src=value._C_tensor_view(),
+                src=value._C_view,
                 dst=_C.TensorView(self._data, view.shape, view._strides, view._offset),
             )
             return
@@ -263,10 +263,10 @@ class Tensor:
             value = value._to_contiguous()
 
         _C.scatter_to_axes(
-            src=value._C_tensor_view(),
-            dst=self._C_tensor_view(),
+            src=value._C_view,
+            dst=self._C_view,
             fancy_dims_in_src=fax.fancy_dims_in_src,
-            fancy_dims_data=[t._C_tensor_view() for t in fax.fancy_dims_data],
+            fancy_dims_data=[t._C_view for t in fax.fancy_dims_data],
             out_axis_is_fancy=fax.out_axis_is_fancy,
             out_axis_target=fax.out_axis_target,
         )
@@ -297,7 +297,7 @@ class Tensor:
         return self.shape == (0,)
 
     @property
-    def T(self) -> "Tensor":
+    def T(self) -> Tensor:
         """Returns a transposed view (no copy)."""
         if len(self.shape) < 2:
             return self
@@ -309,7 +309,7 @@ class Tensor:
             self._offset,
         )
 
-    def to(self, target: DataType) -> "Tensor":
+    def to(self, target: DataType) -> Tensor:
         """Cast the tensor to a new DataType, leaves inplace if no cast needed."""
         if target == self.dtype:
             return self
@@ -318,7 +318,7 @@ class Tensor:
             target, self.shape, new_buffer, self._strides, self._offset
         )
 
-    def reshape(self, *dims: int) -> "Tensor":
+    def reshape(self, *dims: int) -> Tensor:
         """Returns a reshaped view (no copy)."""
         if math.prod(dims) != self.numel:
             raise ValueError(f"Can't reshape {self.shape} into {dims}.")
@@ -331,7 +331,7 @@ class Tensor:
             base.dtype, tuple(dims), base._data, strides=None, offset=base._offset
         )
 
-    def transpose(self, dim0: int, dim1: int) -> "Tensor":
+    def transpose(self, dim0: int, dim1: int) -> Tensor:
         """Permutes two tensor dimensions."""
         if len(self.shape) < 2:
             return self
@@ -350,7 +350,7 @@ class Tensor:
             self._offset,
         )
 
-    def expand(self, shape: TensorShape) -> "Tensor":
+    def expand(self, shape: TensorShape) -> Tensor:
         """Expand the tensor to target shape, no copy."""
         if len(shape) < self.ndim:
             raise ValueError(f"Cannot broadcast {self.shape} to {shape}.")
@@ -372,15 +372,7 @@ class Tensor:
             self.dtype, shape, self._data, tuple(strides), self._offset
         )
 
-    # Common ops shortcuts
-
-    def sum(self) -> "Tensor":
-        """Compute per-coef sum of tensor coefficients."""
-        if self.is_empty:  # FIXME: strides&offset
-            return Tensor(0, dtype=self.dtype)
-        return Tensor(_C.sum(self._C_tensor_view()))
-
-    def equals(self, other: "Tensor") -> bool:
+    def equals(self, other: Tensor) -> bool:
         """Test per-coefficient equality, auto-promotes to best dtype."""
         if self.shape != other.shape:
             return False
@@ -392,7 +384,7 @@ class Tensor:
             first = self.to(promote_type)
         if promote_type != other.dtype:
             other = other.to(promote_type)
-        return _C.equals(first._C_tensor_view(), other._C_tensor_view())
+        return _C.equals(first._C_view, other._C_view)
 
     def tolist(self) -> InputType:
         """Converts the tensor to a list, preserving shape and type."""
@@ -412,19 +404,92 @@ class Tensor:
 
         return rec(self.shape, self._strides, self._offset, 0)
 
+    # Tensor ops
+
+    def __add__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        this, other = _broadcast_shape_and_dtype(self, other)
+        return Tensor.init_from_components(
+            dtype=this.dtype,
+            shape=this.shape,
+            flat_data=_C.add(this._C_view, other._C_view),
+            strides=None,
+            offset=None,
+        )
+
+    def __radd__(self, other: Tensor | float | int | bool) -> Tensor:
+        return self.__add__(other)
+
+    def __sub__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        this, other = _broadcast_shape_and_dtype(self, other)
+        return Tensor.init_from_components(
+            dtype=this.dtype,
+            shape=this.shape,
+            flat_data=_C.subtract(this._C_view, other._C_view),
+            strides=None,
+            offset=None,
+        )
+
+    def __rsub__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        return other.__sub__(self)
+
+    def __mul__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        this, other = _broadcast_shape_and_dtype(self, other)
+        return Tensor.init_from_components(
+            dtype=this.dtype,
+            shape=this.shape,
+            flat_data=_C.multiply(this._C_view, other._C_view),
+            strides=None,
+            offset=None,
+        )
+
+    def __rmul__(self, other: Tensor | float | int | bool) -> Tensor:
+        return self.__mul__(other)
+
+    def __truediv__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        this, other = _broadcast_shape_and_dtype(self, other)
+        return Tensor.init_from_components(
+            dtype=this.dtype,
+            shape=this.shape,
+            flat_data=_C.divide(this._C_view, other._C_view),
+            strides=None,
+            offset=None,
+        )
+
+    def __rtruediv__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        return other.__truediv__(self)
+
+    def sum(self) -> Tensor:
+        """Compute per-coef sum of tensor coefficients."""
+        if self.is_empty:  # FIXME: strides&offset
+            return Tensor(0, dtype=self.dtype)
+        return Tensor(_C.sum(self._C_view))
+
     # Private operators
 
     def _is_contiguous(self) -> bool:
         """Checks if current view is contiguous in memory."""
         return self._strides == _infer_strides(self._shape)
 
-    def _to_contiguous(self) -> "Tensor":
+    def _to_contiguous(self) -> Tensor:
         """Returns a contiguous version of the tensor (copy if necessary)."""
         if self._is_contiguous():
             return self
         return Tensor(self.tolist(), self.dtype)
 
-    def _C_tensor_view(self) -> _C.TensorView:
+    @property
+    def _C_view(self) -> _C.TensorView:
         """Return a C++-compatible tensor view."""
         return _C.TensorView(self._data, self.shape, self._strides, self._offset)
 
@@ -751,6 +816,20 @@ def _broadcast_shapes(*shapes: TensorShape) -> TensorShape:
             elif final_shape[i] != s[i]:
                 raise IndexError(f"Cannot broadcast shapes {s} and {final_shape}.")
     return tuple(final_shape)
+
+
+def _broadcast_dtypes(*tensors: Tensor) -> DataType:
+    if not tensors:
+        return DataType.FP32
+    return max(tensors, key=lambda x: x.dtype, default=DataType.FP32).dtype  # type: ignore
+
+
+def _broadcast_shape_and_dtype(*tensors: Tensor) -> tuple[Tensor, ...]:
+    if not tensors:
+        return tuple()
+    dtype = _broadcast_dtypes(*tensors)
+    shape = _broadcast_shapes(*[t.shape for t in tensors])
+    return tuple([t.to(dtype).expand(shape) for t in tensors])
 
 
 TensorIndex = (

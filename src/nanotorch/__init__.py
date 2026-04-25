@@ -1,5 +1,6 @@
 from .core import DataType, Tensor, bool_, float32, float64, int32, int64
 from .factories import arange, eye, full, ones, tensor, zeros
+from .ops import add, divide, multiply, subtract
 
 __all__ = [
     "DataType",
@@ -15,4 +16,8 @@ __all__ = [
     "int64",
     "float32",
     "float64",
+    "add",
+    "divide",
+    "multiply",
+    "subtract",
 ]
