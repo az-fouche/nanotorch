@@ -164,6 +164,50 @@ std::shared_ptr<Storage> divide(const TensorView& x1, const TensorView& x2) {
     return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a / b; });
 }
 
+
+std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
+    auto s1 = x1.storage;
+    auto s2 = x2.storage;
+
+    if (s1->dtype() != s2->dtype())
+        throw std::invalid_argument(
+            "matmul: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
+            +  " and " + dtype_to_format(s2->dtype()) + "."
+        );
+    if (x1.shape.size() != x2.shape.size())
+        throw std::invalid_argument("matmul: x1 and x2 have different sizes.");
+
+    if (x1.shape.size() != 2) 
+        throw std::invalid_argument("matmul: only 2D tensors supported.");
+
+    py::ssize_t lsize = x1.shape[0];
+    py::ssize_t msize = x1.shape[1];
+    py::ssize_t rsize = x2.shape[1];
+    auto numel = lsize * rsize;
+    auto new_storage = Storage::allocate(numel, x1.storage->dtype());
+    std::vector<py::ssize_t> loc1(2);
+    std::vector<py::ssize_t> loc2(2);
+    std::vector<py::ssize_t> loco(2);
+    return dispatch_dtype(s1->dtype(), [&]<typename T>() {
+        auto* ptr1 = static_cast<const T*>(s1->data());
+        auto* ptr2 = static_cast<const T*>(s2->data());
+        auto* ptrout = static_cast<T*>(new_storage->data());
+        for (py::ssize_t i = 0; i < lsize; ++i) {
+            for (py::ssize_t j = 0; j < rsize; ++j) {
+                py::ssize_t idxo = i * rsize + j;
+                T acc = static_cast<T>(0.0);
+                for (int k = 0; k < msize; ++k) {
+                    py::ssize_t idx1 = x1.offset + i * x1.strides[0] + k * x1.strides[1];
+                    py::ssize_t idx2 = x2.offset + k * x2.strides[0] + j * x2.strides[1];
+                    acc += ptr1[idx1] * ptr2[idx2];
+                }
+                ptrout[idxo] = acc;
+            }
+        }
+        return new_storage;
+    });
+}
+
 bool equals(const TensorView& x1, const TensorView& x2) {
     auto s1 = x1.storage;
     auto s2 = x2.storage;
@@ -410,6 +454,7 @@ void bind_ops_(py::module_& m) {
     m.def("subtract", &subtract, "Subtract elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("divide", &divide, "Divide elements pointwise.", py::arg("x1"), py::arg("x2"));
+    m.def("matmul", &matmul, "Matrix multiplication.", py::arg("x1"), py::arg("x2"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );

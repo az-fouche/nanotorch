@@ -19,3 +19,8 @@ def multiply(x: Tensor, y: Tensor) -> Tensor:
 def divide(x: Tensor, y: Tensor) -> Tensor:
     """Divide two tensors component-wise, with broadcasting."""
     return x / y
+
+
+def matmul(x: Tensor, y: Tensor) -> Tensor:
+    """Multiply two tensors with standard matrix multiplication."""
+    return x @ y

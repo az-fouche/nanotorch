@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from types import EllipsisType
-from typing import Any, Callable, NamedTuple, Sequence
+from typing import Any, Callable, Sequence
 
 from nanotorch import _C
 
@@ -355,6 +355,23 @@ class Tensor:
         if not isinstance(other, Tensor):
             other = Tensor(other)
         return other.__truediv__(self)
+
+    def __matmul__(self, other: Tensor) -> Tensor:
+        this = self
+        if this.ndim != 2 or other.ndim != 2:
+            raise ValueError("Only 2D matmul is supported.")
+        if this.shape[1] != other.shape[0]:
+            raise ValueError(f"Cannot multiply {this.shape} @ {other.shape}.")
+        shape = (this.shape[0], other.shape[1])
+        dtype = promote_dtypes(this.dtype, other.dtype)
+        this = this.to(dtype)
+        other = other.to(dtype)
+        return Tensor._new_contiguous(
+            dtype=dtype, shape=shape, storage=_C.matmul(this._C_view, other._C_view)
+        )
+
+    def __rmatmul__(self, other: Tensor) -> Tensor:
+        return other.__matmul__(self)
 
     def sum(self) -> Tensor:
         """Compute per-coef sum of tensor coefficients."""
