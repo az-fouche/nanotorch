@@ -627,7 +627,11 @@ def _get_fancy_axes(shape: TensorShape, index: tuple[TensorIndex, ...]) -> _Fanc
         content = memoryview(fancy_index._data)
         for i in range(len(content)):
             if content[i] < 0:
-                content[i] = content[i] % shape[dim]
+                content[i] = content[i] + shape[dim]
+            if content[i] < 0 or content[i] >= shape[dim]:
+                raise IndexError(
+                    f"Invalid index {content[i]} in axis of len {shape[dim]}."
+                )
 
         if fancy_index.dtype == DataType.BOOL:
             if fancy_index.ndim > 1:

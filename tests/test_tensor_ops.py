@@ -495,6 +495,14 @@ def test_getitem_advanced_broadcast_3d():
     assert x[[1, 1], :, [1, 0]].tolist() == [[6, 8], [5, 7]]
 
 
+def test_getitem_advanced_out_of_bounds():
+    x = nt.arange(60).reshape(4, 3, 5)
+    with pytest.raises(IndexError):
+        x[[1, 4], 2, [2, 3]]  # 4 ≥ axis-0 size
+    with pytest.raises(IndexError):
+        x[[1, -5]]  # -5 < -4
+
+
 # Weird cases
 
 
