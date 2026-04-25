@@ -52,6 +52,16 @@ def equals(x: TensorView, y: TensorView) -> bool: ...
 def sum(x: TensorView) -> float: ...
 
 # Core ops
+def copy_view(*, src: TensorView, dst: TensorView) -> Storage: ...
+def scatter_to_axes(
+    *,
+    src: TensorView,
+    dst: TensorView,
+    fancy_dims_in_src: Sequence[int],
+    fancy_dims_data: Sequence[TensorView],
+    out_axis_is_fancy: Sequence[bool],
+    out_axis_target: Sequence[int],
+) -> Storage: ...
 def gather_from_axes(
     *,
     x: TensorView,

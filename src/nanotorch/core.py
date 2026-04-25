@@ -191,32 +191,24 @@ class Tensor:
             raise IndexError("Cannot index a scalar value.")
         if len([x for x in index if x is not None]) > self.ndim:
             raise IndexError(f"Too many indices ({len(index)}) for {self.ndim}D array.")
-        index = _expand_ellipsis(index, self.shape)
 
-        shape, strides, offset, new_index = _newview_indexing(
-            index, self.shape, self._strides, self._offset
-        )
+        index = _expand_ellipsis(index, self.shape)
+        view, new_index = _newview_indexing(self, index)
 
         if _is_contiguous_view(index):
             # New view, same storage
             return Tensor.init_from_components(
                 dtype=self.dtype,
-                shape=shape,
+                shape=view.shape,
                 flat_data=self._data,
-                strides=strides,
-                offset=offset,
+                strides=view._strides,
+                offset=view._offset,
             )
 
         # Sequence/masked axes necessitate mem copy
-        fax = _get_fancy_axes(shape, new_index)
+        fax = _get_fancy_axes(view.shape, new_index)
         new_data = _C.gather_from_axes(
-            x=Tensor.init_from_components(
-                self.dtype,
-                shape,
-                self._data,
-                strides,
-                offset,
-            )._C_tensor_view(),
+            x=view._C_tensor_view(),
             new_sh=fax.new_shape,
             fancy_dims_in_src=fax.fancy_dims_in_src,
             fancy_dims_data=[t._C_tensor_view() for t in fax.fancy_dims_data],
@@ -229,6 +221,54 @@ class Tensor:
             flat_data=new_data,
             strides=None,
             offset=None,
+        )
+
+    def __setitem__(
+        self, index: TensorIndex | tuple[TensorIndex, ...], value: Tensor | InputType
+    ) -> None:
+        if not isinstance(index, tuple):
+            index = (index,)
+        if self.ndim == 0:
+            raise IndexError("Cannot index into a scalar tensor.")
+        if len([x for x in index if x is not None]) > self.ndim:
+            raise IndexError(f"Too many indices ({len(index)}) for {self.ndim}D array.")
+
+        index = _expand_ellipsis(index, self.shape)
+        view, new_index = _newview_indexing(self, index)
+
+        if not isinstance(value, Tensor):
+            value = Tensor(value, dtype=self.dtype)
+        elif value.dtype != self.dtype:
+            value = value.to(self.dtype)
+
+        if _is_contiguous_view(index):
+            try:
+                value = value.expand(view.shape)
+            except ValueError as e:
+                raise IndexError(str(e)) from e
+            if value._data is self._data:  # aliasing guard
+                value = value._to_contiguous()
+            _C.copy_view(
+                src=value._C_tensor_view(),
+                dst=_C.TensorView(self._data, view.shape, view._strides, view._offset),
+            )
+            return
+
+        fax = _get_fancy_axes(view.shape, new_index)
+        try:
+            value = value.expand(fax.new_shape)
+        except ValueError as e:
+            raise IndexError(str(e)) from e
+        if value._data is self._data:  # aliasing guard
+            value = value._to_contiguous()
+
+        _C.scatter_to_axes(
+            src=value._C_tensor_view(),
+            dst=self._C_tensor_view(),
+            fancy_dims_in_src=fax.fancy_dims_in_src,
+            fancy_dims_data=[t._C_tensor_view() for t in fax.fancy_dims_data],
+            out_axis_is_fancy=fax.out_axis_is_fancy,
+            out_axis_target=fax.out_axis_target,
         )
 
     @property
@@ -542,25 +582,23 @@ def _is_contiguous_view(index: tuple[TensorIndex, ...]) -> bool:
 
 
 def _newview_indexing(
-    index: tuple[TensorIndex, ...],
-    shape: TensorShape,
-    strides: TensorShape,
-    offset: int,
-) -> tuple[TensorShape, TensorShape, int, tuple[TensorIndex, ...]]:
+    x: Tensor, index: tuple[TensorIndex, ...]
+) -> tuple[Tensor, tuple[TensorIndex, ...]]:
     """Indexes a new view of the same storage (simple indexing)."""
+    offset = x._offset
     new_shape: list[int] = []
     new_strides: list[int] = []
     new_index: list[TensorIndex] = []
 
     olddim = 0
     newdim = 0
-    while olddim < len(shape) or newdim < len(index):
+    while olddim < len(x.shape) or newdim < len(index):
         if newdim >= len(index) or (
             (not isinstance(index[newdim], (int, slice)))
             and (index[newdim] is not None)
         ):
-            new_shape.append(shape[olddim])
-            new_strides.append(strides[olddim])
+            new_shape.append(x.shape[olddim])
+            new_strides.append(x._strides[olddim])
             new_index.append(None if newdim >= len(index) else index[newdim])
             olddim += 1
             newdim += 1
@@ -573,7 +611,7 @@ def _newview_indexing(
             new_index.append(None)
             newdim += 1
         else:
-            nelem = shape[olddim]
+            nelem = x.shape[olddim]
             if isinstance(sel, int):
                 if sel < 0:
                     sel += nelem
@@ -581,20 +619,22 @@ def _newview_indexing(
                     raise IndexError(
                         f"Cannot index at position {sel} in {nelem} elements."
                     )
-                offset += sel * strides[olddim]
+                offset += sel * x._strides[olddim]
             elif isinstance(sel, slice):
                 start, stop, step = sel.indices(nelem)
                 length = len(range(start, stop, step))
                 new_shape.append(length)
-                new_strides.append(strides[olddim] * step)
+                new_strides.append(x._strides[olddim] * step)
                 new_index.append(None)
-                offset += start * strides[olddim]
+                offset += start * x._strides[olddim]
             else:
                 raise ValueError(f"Unhandle index type: {type(sel)}.")
             olddim += 1
             newdim += 1
 
-    return tuple(new_shape), tuple(new_strides), offset, tuple(new_index)
+    return Tensor.init_from_components(
+        x.dtype, tuple(new_shape), x._data, tuple(new_strides), offset
+    ), tuple(new_index)
 
 
 def _get_fancy_axes(shape: TensorShape, index: tuple[TensorIndex, ...]) -> _FancyAxes:
@@ -640,6 +680,10 @@ def _get_fancy_axes(shape: TensorShape, index: tuple[TensorIndex, ...]) -> _Fanc
         if fancy_index.dtype == DataType.BOOL:
             if fancy_index.ndim > 1:
                 raise NotImplementedError("nD boolean masks not here (yet).")
+            if len(fancy_index) != shape[dim]:
+                raise IndexError(
+                    f"Wrong boolean index shape: {len(fancy_index)} (expected {shape[dim]})."
+                )
             indices = [i for i, b in enumerate(content) if b]
             fancy_index = Tensor(indices)
 

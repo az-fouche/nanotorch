@@ -397,6 +397,12 @@ def test_getitem_advanced_simple_mask_tensor():
     assert x[nt.tensor([False, True, True])].tolist() == [[5, 6, 7, 8], [9, 10, 11, 12]]
 
 
+def test_getitem_advanced_simple_mask_wrongshape():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    with pytest.raises(IndexError):
+        x[[False, True]]
+
+
 def test_getitem_advanced_neg():
     x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
     assert x[[-2, -1]].tolist() == [[5, 6, 7, 8], [9, 10, 11, 12]]
@@ -550,6 +556,12 @@ def test_setitem_1d_single_oob_raises():
         x[6] = 12
 
 
+def test_setitem_1d_single_shape_raises():
+    x = nt.arange(6)
+    with pytest.raises(IndexError):
+        x[0, 1] = 12
+
+
 def test_setitem_1d_slice_single():
     x = nt.arange(6)
     x[2:] = 12
@@ -594,8 +606,8 @@ def test_setitem_1d_slice_container_large_raises():
 
 def test_setitem_1d_slice_self():
     x = nt.arange(6)
-    x[2:] = x[:2]
-    assert x.tolist() == [0, 1, 3, 4, 1, 0]
+    x[4:] = x[:2]
+    assert x.tolist() == [0, 1, 2, 3, 0, 1]
 
 
 def test_setitem_1d_boolmask():
@@ -638,6 +650,12 @@ def test_setitem_1d_multiindex_oob():
     x = nt.arange(6)
     with pytest.raises(IndexError):
         x[[1, 3, 5, 12]] = 12
+
+
+def test_setitem_2d_pointwise():
+    x = nt.arange(12).reshape(3, 4)
+    x[0, 2] = 12
+    assert x.tolist() == [[0, 1, 12, 3], [4, 5, 6, 7], [8, 9, 10, 11]]
 
 
 def test_setitem_2d_single():
