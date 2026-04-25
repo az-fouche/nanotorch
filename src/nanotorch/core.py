@@ -1,5 +1,7 @@
 """Base tensor class."""
 
+from __future__ import annotations
+
 import math
 from enum import Enum
 from types import EllipsisType
@@ -9,7 +11,6 @@ from nanotorch import _C
 
 InputType = list | float | int | bool
 TensorShape = tuple[int, ...]
-TensorIndex = int | slice | Sequence[bool | int | Sequence[int]] | EllipsisType | None
 
 MAX_TENSOR_LEVEL = 32
 
@@ -616,12 +617,15 @@ def _get_fancy_axes(shape: TensorShape, index: tuple[TensorIndex, ...]) -> _Fanc
 
         # Fancy axis (integer-based or boolean mask)
         fancy_index = index[dim]
-        if not isinstance(fancy_index, Sequence):
+        if isinstance(fancy_index, Tensor):
+            pass
+        elif isinstance(fancy_index, Sequence):
+            try:
+                fancy_index = Tensor(fancy_index)  # type: ignore
+            except Exception as e:
+                raise IndexError(f"Could not interpret index {dim} as a Tensor: {e}")
+        else:
             raise IndexError(f"Unexpected selector type {type(fancy_index)}")
-        try:
-            fancy_index = Tensor(fancy_index)  # type: ignore
-        except Exception as e:
-            raise IndexError(f"Could not interpret index {dim} as a Tensor: {e}")
 
         # TODO: do it index-based once implemented
         content = memoryview(fancy_index._data)
@@ -703,3 +707,8 @@ def _broadcast_shapes(*shapes: TensorShape) -> TensorShape:
             elif final_shape[i] != s[i]:
                 raise IndexError(f"Cannot broadcast shapes {s} and {final_shape}.")
     return tuple(final_shape)
+
+
+TensorIndex = (
+    int | slice | Sequence[bool | int | Sequence[int]] | EllipsisType | Tensor | None
+)
