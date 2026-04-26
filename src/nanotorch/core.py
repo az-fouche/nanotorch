@@ -356,6 +356,9 @@ class Tensor:
             other = Tensor(other)
         return other.__truediv__(self)
 
+    def __neg__(self) -> Tensor:
+        return self.__mul__(-1)
+
     def __matmul__(self, other: Tensor) -> Tensor:
         this = self
         if this.ndim != 2 or other.ndim != 2:
@@ -373,11 +376,58 @@ class Tensor:
     def __rmatmul__(self, other: Tensor) -> Tensor:
         return other.__matmul__(self)
 
-    def sum(self) -> Tensor:
+    def sum(
+        self,
+        axis: int | TensorShape | None = None,
+        keepdim: bool = False,
+        *,
+        dtype: DataType | None = None,
+    ) -> Tensor:
         """Compute per-coef sum of tensor coefficients."""
-        if self.is_empty:  # FIXME: strides&offset
-            return Tensor(0, dtype=self.dtype)
-        return Tensor(_C.sum(self._C_view))
+        if axis is None:
+            axis = tuple(range(self.ndim))
+        elif isinstance(axis, int):
+            axis = (axis,)
+        axis = tuple(ax + self.ndim if ax < 0 else ax for ax in axis)
+        if any(not isinstance(ax, int) for ax in axis):
+            raise TypeError(f"Invalid axis: {axis}")
+        if len(set(axis)) != len(axis):
+            raise ValueError(f"Redundant axes: {axis}")
+        if any(ax < 0 or ax >= self.ndim for ax in axis):
+            raise IndexError(f"Invalid axis: {axis}")
+        if keepdim:
+            new_shape = tuple(1 if i in axis else s for i, s in enumerate(self.shape))
+        else:
+            new_shape = tuple(s for i, s in enumerate(self.shape) if i not in axis)
+
+        if dtype is None:
+            dtype = max(self.dtype, DataType.INT64)
+
+        if self.is_empty:
+            return Tensor._new_contiguous(
+                dtype, new_shape, _C.zeros(new_shape, dtype.cpp_dtype)
+            )
+
+        return Tensor._new_contiguous(
+            dtype=dtype,
+            shape=new_shape,
+            storage=_C.sum(self._C_view, axis, keepdim, dtype.cpp_dtype),
+        )
+
+    def mean(
+        self,
+        axis: int | TensorShape | None = None,
+        keepdim: bool = False,
+        *,
+        dtype: DataType | None = None,
+    ) -> Tensor:
+        """Compute per-coef sum of tensor coefficients."""
+        if dtype is None:
+            dtype = self.dtype
+        if dtype < DataType.FP32:
+            raise TypeError("Cannot take mean of integer tensor, cast to fp.")
+        sum_ = self.sum(axis=axis, keepdim=keepdim, dtype=dtype)
+        return sum_ / (self.numel // sum_.numel)
 
     # Private operators
 

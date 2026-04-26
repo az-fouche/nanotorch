@@ -19,7 +19,7 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t st
 std::shared_ptr<Storage> arange(py::ssize_t n, Dtype dtype);
 
 // Common ops
-double sum(const TensorView& x);
+std::shared_ptr<Storage> sum(const TensorView& x, const std::vector<py::ssize_t>& axis, bool keepdim, Dtype dtype);
 std::shared_ptr<Storage> add(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2);

@@ -74,30 +74,69 @@ std::shared_ptr<Storage> arange(py::ssize_t n, Dtype dtype) {
 
 // Ops
 
-double sum(const TensorView& x) {
-    auto storage = x.storage;
-    auto n_axes = static_cast<py::ssize_t>(x.shape.size());
-    auto numel = numel_from_shape(x.shape);
-    return dispatch_dtype(storage->dtype(), [&]<typename T>() {
-        auto data = static_cast<const T*>(storage->data());
-        double result = 0;
-        std::vector<py::ssize_t> loc(n_axes);
-        for (py::ssize_t i = 0; i < numel; ++i) {
-            // Add value at loc
-            py::ssize_t idx = x.offset;
-            for (py::ssize_t j = 0; j < n_axes; ++j) idx += x.strides[j] * loc[j];
-            result += data[idx];
+std::shared_ptr<Storage> sum(
+    const TensorView& x, const std::vector<py::ssize_t>& axis_drop, bool keepdim, Dtype dtype
+) {
+    auto n_axes = static_cast<py::ssize_t>(axis_drop.size());
+    auto ndim_src = static_cast<py::ssize_t>(x.shape.size());
+    auto ndim_dst = static_cast<py::ssize_t>(ndim_src - n_axes);
 
-            // Loc update
-            py::ssize_t j = n_axes - 1;
-            while (j >= 0) { 
-                loc[j] += 1;
-                if (loc[j] < x.shape[j]) break;
-                loc[j] = 0;
-                j -= 1;
-            }
+    // Compute both shapes
+    auto axis_keep = std::vector<py::ssize_t>(ndim_dst);
+    auto shape_drop = std::vector<py::ssize_t>(n_axes);
+    auto shape_keep = std::vector<py::ssize_t>(ndim_dst);
+    py::ssize_t posd = 0, posk = 0;
+    for (size_t p = 0; p < ndim_src; ++p)
+        if (std::find(axis_drop.begin(), axis_drop.end(), p) != axis_drop.end())
+            shape_drop[posd++] = x.shape[p];
+        else {
+            axis_keep[posk] = p;
+            shape_keep[posk] = x.shape[p];
+            posk++;
         }
-        return result;
+
+    auto numel_drop = numel_from_shape(shape_drop);
+    auto numel_keep = numel_from_shape(shape_keep);
+    auto dst_storage = Storage::allocate(numel_keep, dtype);
+
+    return dispatch_dtype(x.storage->dtype(), [&]<typename T_src>() {
+        return dispatch_dtype(dtype, [&]<typename T_dst>() {
+            auto src_data = static_cast<const T_src*>(x.storage->data());
+            auto dst_data = static_cast<T_dst*>(dst_storage->data());
+            std::vector<py::ssize_t> loc_dst(ndim_dst);
+            for (py::ssize_t i = 0; i < numel_keep; ++i) {
+                // Sum over all src values to reduce
+                T_dst acc = static_cast<T_dst>(0);
+                std::vector<py::ssize_t> loc_src(n_axes);
+                py::ssize_t offset = x.offset;
+                for (py::ssize_t p = 0; p < ndim_dst; ++p) 
+                    offset += x.strides[axis_keep[p]] * loc_dst[p];
+                for (py::ssize_t j = 0; j < numel_drop; ++j) {
+                    py::ssize_t idx_src = offset;
+                    for (py::ssize_t p = 0; p < n_axes; ++p) 
+                        idx_src += x.strides[axis_drop[p]] * loc_src[p];
+                    acc += static_cast<T_dst>(src_data[idx_src]); 
+                    // Carry over src
+                    py::ssize_t k = n_axes - 1;
+                    while (k >= 0) { 
+                        loc_src[k] += 1;
+                        if (loc_src[k] < x.shape[axis_drop[k]]) break;
+                        loc_src[k] = 0;
+                        k -= 1;
+                    }
+                }
+                dst_data[i] = acc;
+                // Cary over dst
+                py::ssize_t k = ndim_dst - 1;
+                while (k >= 0) { 
+                    loc_dst[k] += 1;
+                    if (loc_dst[k] < x.shape[axis_keep[k]]) break;
+                    loc_dst[k] = 0;
+                    k -= 1;
+                }
+            }
+            return dst_storage;
+        });
     });
 }
 
@@ -449,7 +488,7 @@ void bind_ops_(py::module_& m) {
         "cast", [](const Storage& s, Dtype t) { return s.cast(t); }, 
         "Cast a storage to another dtype.", py::arg("storage"), py::arg("dtype")
     );
-    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"));
+    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("keepdim"), py::arg("dtype"));
     m.def("add", &add, "Add elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("subtract", &subtract, "Subtract elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));
