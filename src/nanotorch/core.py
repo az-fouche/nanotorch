@@ -294,6 +294,10 @@ class Tensor:
             self.dtype, shape, self._data, tuple(strides), self._offset
         )
 
+    def flatten(self) -> Tensor:
+        """Flattens into a 1D tensor."""
+        return self.reshape(self.numel)
+
     def equals(self, other: Tensor) -> bool:
         """Test per-coefficient equality, auto-promotes to best dtype."""
         if self.shape != other.shape:
@@ -325,6 +329,13 @@ class Tensor:
             ]
 
         return rec(self.shape, self._strides, self._offset, 0)
+
+    def item(self) -> bool | int | float:
+        """Converts a single element tensor to a scalar."""
+        if self.numel != 1:
+            raise RuntimeError(f"Cannot convert {self} to a scalar.")
+        storage = memoryview(self._data)
+        return storage[self._offset]
 
     # Tensor ops
 
@@ -428,6 +439,42 @@ class Tensor:
             raise TypeError("Cannot take mean of integer tensor, cast to fp.")
         sum_ = self.sum(axis=axis, keepdim=keepdim, dtype=dtype)
         return sum_ / (self.numel // sum_.numel)
+
+    def exp(self) -> Tensor:
+        """Apply coefficient-wise exponential."""
+        if self.is_empty:
+            return self
+        dtype = promote_dtypes(self.dtype, DataType.FP32)
+        return Tensor._new_contiguous(dtype, self.shape, _C.exp(self.to(dtype)._C_view))
+
+    def log(self) -> Tensor:
+        """Apply coefficient-wise exponential."""
+        if self.is_empty:
+            return self
+        dtype = promote_dtypes(self.dtype, DataType.FP32)
+        return Tensor._new_contiguous(dtype, self.shape, _C.log(self.to(dtype)._C_view))
+
+    def pow(self, exponent: float | int | bool | Tensor) -> Tensor:
+        """Apply coefficient-wise exponential."""
+        if self.is_empty:
+            return self
+        if not isinstance(exponent, Tensor):
+            exponent = Tensor(exponent)
+        dtype = promote_dtypes(self.dtype, exponent.dtype)
+        exponent_fp = float(exponent.item())
+        if exponent_fp < 0 and dtype <= DataType.INT64:
+            raise RuntimeError("Cannot use negative exponent with integer tensor.")
+        return Tensor._new_contiguous(
+            dtype, self.shape, _C.pow(self.to(dtype)._C_view, exponent_fp)
+        )
+
+    def __pow__(self, other: Tensor | float | int | bool) -> Tensor:
+        return self.pow(other)
+
+    def __rpow__(self, other: Tensor | float | int | bool) -> Tensor:
+        if not isinstance(other, Tensor):
+            other = Tensor(other)
+        return other.pow(self)
 
     # Private operators
 

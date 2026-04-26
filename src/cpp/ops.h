@@ -25,6 +25,9 @@ std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> divide(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> exp(const TensorView& x);
+std::shared_ptr<Storage> log(const TensorView& x);
+std::shared_ptr<Storage> pow(const TensorView& x, Scalar value);
 
 // Core ops
 bool equals(const TensorView& x1, const TensorView& x2);

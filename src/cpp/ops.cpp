@@ -141,6 +141,35 @@ std::shared_ptr<Storage> sum(
 }
 
 template <typename F>
+std::shared_ptr<Storage> _unary_op_generic(const TensorView& x, F&& func) {
+    auto n_axes = static_cast<py::ssize_t>(x.shape.size());
+    auto numel = numel_from_shape(x.shape);
+    auto result = Storage::allocate(numel, x.storage->dtype());
+    return dispatch_dtype(x.storage->dtype(), [&]<typename T>() {
+        auto* data_in = static_cast<const T*>(x.storage->data());
+        auto* data_out = static_cast<T*>(result->data());
+        std::vector<py::ssize_t> loc(n_axes);
+        for (py::ssize_t i = 0; i < numel; ++i) {
+            py::ssize_t idx = x.offset;
+            for (py::ssize_t j = 0; j < n_axes; ++j) {
+                idx += x.strides[j] * loc[j];
+            }
+            data_out[i] = func(data_in[idx]);
+
+            // Loc update
+            py::ssize_t j = n_axes - 1;
+            while (j >= 0) { 
+                loc[j] += 1;
+                if (loc[j] < x.shape[j]) break;
+                loc[j] = 0;
+                j -= 1;
+            }
+        }
+        return result;
+    });
+}
+
+template <typename F>
 std::shared_ptr<Storage> _binary_op_generic(
     const TensorView& x1, const TensorView& x2, F&& func
 ) {
@@ -245,6 +274,18 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
         }
         return new_storage;
     });
+}
+
+std::shared_ptr<Storage> exp(const TensorView& x) {
+    return _unary_op_generic(x, []<class T>(T a) { return std::exp(a); });
+}
+
+std::shared_ptr<Storage> log(const TensorView& x) {
+    return _unary_op_generic(x, []<class T>(T a) { return std::log(a); });
+}
+
+std::shared_ptr<Storage> pow(const TensorView& x, Scalar value) {
+    return _unary_op_generic(x, [value]<class T>(T a) { return std::pow(a, value.item<T>()); });
 }
 
 bool equals(const TensorView& x1, const TensorView& x2) {
@@ -494,6 +535,9 @@ void bind_ops_(py::module_& m) {
     m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("divide", &divide, "Divide elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("matmul", &matmul, "Matrix multiplication.", py::arg("x1"), py::arg("x2"));
+    m.def("exp", [](const TensorView& x) { return exp(x); }, "Component-wise exponentiation.", py::arg("x"));
+    m.def("log", [](const TensorView& x) { return log(x); }, "Component-wise log.", py::arg("x"));
+    m.def("pow", [](const TensorView& x, Scalar a) { return pow(x, a); }, "Component-wise power.", py::arg("x"), py::arg("a"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );

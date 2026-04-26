@@ -1,7 +1,10 @@
+import math
+
 import numpy as np
 import pytest
 
 import nanotorch as nt
+from nanotorch import testing
 
 # Tolist
 
@@ -521,3 +524,100 @@ def test_zero_dim_shape_3d_middle():
     assert x.shape == (2, 1, 0)
     assert x.tolist() == [[[]], [[]]]
     assert x.sum().tolist() == 0
+
+
+# item()
+
+
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        (0, 0),
+        (1.5, 1.5),
+        (True, True),
+        (False, False),
+        ([0], 0),
+        ([3.5], 3.5),
+        ([[5]], 5),
+        ([[[[True]]]], True),
+    ],
+)
+def test_item_valid(input, expected):
+    assert nt.tensor(input).item() == expected
+
+
+def test_item_empty_raises():
+    with pytest.raises(RuntimeError):
+        nt.tensor([]).item()
+
+
+def test_item_toomany_raises():
+    with pytest.raises(RuntimeError):
+        nt.tensor([1, 2]).item()
+
+
+# exp/log/pow
+
+
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        (0.0, 1.0),
+        (1.0, math.e),
+        ([0, 1], [1.0, math.e]),
+        ([[0, 1], [2, 3]], [[1.0, math.e], [math.e**2, math.e**3]]),
+    ],
+)
+def test_tensor_exp(input, expected):
+    x = nt.tensor(input)
+    out = x.exp()
+    testing.assert_allclose(out, nt.tensor(expected))
+    assert out.dtype == nt.tensor(expected).dtype
+
+
+@pytest.mark.parametrize(
+    "input,expected",
+    [
+        (1.0, 0.0),
+        (math.e, 1.0),
+        ([1.0, math.e], [0.0, 1.0]),
+        ([[1.0, math.e], [math.e**2, math.e**3]], [[0.0, 1.0], [2.0, 3.0]]),
+    ],
+)
+def test_tensor_log(input, expected):
+    x = nt.tensor(input)
+    out = x.log()
+    testing.assert_allclose(out, nt.tensor(expected))
+    assert out.dtype == nt.tensor(expected).dtype
+
+
+@pytest.mark.parametrize(
+    "input,exp,expected",
+    [
+        (1, 1, 1),
+        (1, 0, 1),
+        (0, 1, 0),
+        (0, 0, 1),
+        (1.0, 1, 1.0),
+        (1, 1.0, 1.0),
+        (2, 2, 4),
+        (3, 4.0, 81.0),
+        (9.0, -2, 0.0123),
+        (2.5, 3.7, 29.6741),
+        ([1, 2, 3], 2, [1, 4, 9]),
+        ([[1, 2], [3, 4]], 2.0, [[1.0, 4.0], [9.0, 16.0]]),
+        ([[1.0, 2.0], [3.0, 4.0]], 2, [[1.0, 4.0], [9.0, 16.0]]),
+    ],
+)
+def test_tensor_pow(input, exp, expected):
+    x = nt.tensor(input)
+    out = x.pow(exp)
+    out__pow__ = x**exp
+    testing.assert_allclose(out, nt.tensor(expected), tol=1e-4)
+    testing.assert_allclose(out, out__pow__)
+    assert out.dtype == out__pow__.dtype == nt.tensor(expected).dtype
+
+
+def test_tensor_pow_int_neg_raises():
+    with pytest.raises(RuntimeError):
+        _ = nt.tensor(1) ** -2
