@@ -495,6 +495,28 @@ def test_getitem_advanced_out_of_bounds():
         x[[1, -5]]  # -5 < -4
 
 
+def test_getitem_advanced_from_cast_view_i32():
+    x = nt.Tensor(
+        [
+            [0.0, 1.0, 2.0, 3.0],
+            [1.0, 2.7182817459106445, 7.389056205749512, 20.08553695678711],
+            [8.0, 9.0, 10.0, 11.0],
+        ]
+    )
+    assert x[:, x[0].to(nt.int32)].tolist() == x.tolist()
+
+
+def test_getitem_advanced_from_cast_view_i64():
+    x = nt.Tensor(
+        [
+            [0.0, 1.0, 2.0, 3.0],
+            [1.0, 2.7182817459106445, 7.389056205749512, 20.08553695678711],
+            [8.0, 9.0, 10.0, 11.0],
+        ]
+    )
+    assert x[:, x[0].to(nt.int64)].tolist() == x.tolist()
+
+
 # __setitem__
 
 

@@ -235,9 +235,12 @@ class Tensor:
         """Cast the tensor to a new DataType, leaves inplace if no cast needed."""
         if target == self.dtype:
             return self
-        new_buffer = _C.cast(self._data, target.cpp_dtype)
+        this = self
+        if not this._is_contiguous(full_span=True):
+            this = this._to_contiguous(force=True)
+        new_buffer = _C.cast(this._data, target.cpp_dtype)
         return Tensor._new_view(
-            target, self.shape, new_buffer, self._strides, self._offset
+            target, this.shape, new_buffer, this._strides, this._offset
         )
 
     def reshape(self, *dims: int) -> Tensor:
@@ -248,9 +251,9 @@ class Tensor:
             raise ValueError("No dimensions provided.")
         if dims == self.shape:
             return self
-        base = self._to_contiguous()
+        this = self._to_contiguous()
         return Tensor._new_view(
-            base.dtype, tuple(dims), base._data, strides=None, offset=base._offset
+            this.dtype, tuple(dims), this._data, strides=None, offset=this._offset
         )
 
     def transpose(self, dim0: int, dim1: int) -> Tensor:
@@ -478,13 +481,19 @@ class Tensor:
 
     # Private operators
 
-    def _is_contiguous(self) -> bool:
+    def _is_contiguous(self, full_span: bool = False) -> bool:
         """Checks if current view is contiguous in memory."""
-        return self._strides == _infer_strides(self._shape)
+        if not full_span:
+            return self._strides == _infer_strides(self._shape)
+        return (
+            self._strides == _infer_strides(self._shape)
+            and self._offset == 0
+            and self.numel == len(memoryview(self._data))
+        )
 
-    def _to_contiguous(self) -> Tensor:
+    def _to_contiguous(self, force: bool = False) -> Tensor:
         """Returns a contiguous version of the tensor (copy if necessary)."""
-        if self._is_contiguous():
+        if not force and self._is_contiguous():
             return self
         return Tensor(self.tolist(), self.dtype)
 
@@ -650,6 +659,8 @@ class _FancyAxes:
                 raise IndexError(f"Unexpected selector type {type(fancy_index)}")
 
             # TODO: do it index-based once implemented
+            if not fancy_index._is_contiguous(full_span=True):
+                fancy_index = fancy_index._to_contiguous(force=True)
             content = memoryview(fancy_index._data)
             for i in range(len(content)):
                 if content[i] < 0:
@@ -670,7 +681,7 @@ class _FancyAxes:
                 fancy_index = Tensor(indices)
 
             fancy_dims_in_src.append(dim)
-            indarrs_raw.append(fancy_index)
+            indarrs_raw.append(fancy_index.to(DataType.INT64))
 
         indarr_shape = broadcast_shapes(*(t.shape for t in indarrs_raw))
         fancy_dims_data = [t.expand(indarr_shape) for t in indarrs_raw]
