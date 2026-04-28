@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from types import EllipsisType
-from typing import Any, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from nanotorch import _C
 
@@ -16,6 +16,9 @@ from ._indexing import (
     expand_ellipsis,
     is_contiguous_view,
 )
+
+if TYPE_CHECKING:
+    from nanotorch.autograd import Function
 
 MAX_TENSOR_LEVEL = 32
 
@@ -29,17 +32,30 @@ class Tensor:
         Tensor coefficients (scalar or list-like).
     dtype: DataType
         Data type (optional, otherwise will be autodetected).
+    requires_grad: bool
+        Enables autograd for this tensor and all tensors constructed from it.
     """
 
-    def __init__(self, data: InputType, dtype: DataType | None = None):
-
+    def __init__(
+        self,
+        data: InputType,
+        dtype: DataType | None = None,
+        requires_grad: bool = False,
+    ):
+        # Strided 1D view
         dtype, shape, storage = _extract_tensor_data(data, dtype)
-
         self._dtype = dtype
         self._shape = shape
         self._data = storage
         self._strides = _infer_strides(shape)
         self._offset = 0
+
+        # Autograd
+        if self.dtype <= DataType.INT64 and requires_grad:
+            raise RuntimeError("Cannot enable grad on a non-float tensor.")
+        self._requires_grad = requires_grad
+        self._grad: Tensor | None = None
+        self._grad_fn: Function | None = None
 
     @classmethod
     def _new_contiguous(
@@ -79,6 +95,9 @@ class Tensor:
         new._data = storage
         new._strides = strides
         new._offset = offset
+        new._requires_grad = False
+        new._grad_fn = None
+        new._grad = None
         return new
 
     def __repr__(self) -> str:
@@ -243,6 +262,10 @@ class Tensor:
             target, this.shape, new_buffer, this._strides, this._offset
         )
 
+    def clone(self) -> Tensor:
+        """Returns a copy of the tensor."""
+        return Tensor(self.tolist(), self.dtype)
+
     def reshape(self, *dims: int) -> Tensor:
         """Returns a reshaped view (no copy)."""
         if math.prod(dims) != self.numel:
@@ -340,13 +363,11 @@ class Tensor:
         storage = memoryview(self._data)
         return storage[self._offset]
 
-    # Tensor ops
+    # Tensor ops -- bound in nanotorch.__init__
 
-    def __add__(self, other: Tensor | float | int | bool) -> Tensor:
-        return _binary_kernel_op(self, other, _C.add)
+    def __add__(self, other: TensorLike) -> Tensor: ...
 
-    def __radd__(self, other: Tensor | float | int | bool) -> Tensor:
-        return self.__add__(other)
+    def __radd__(self, other: TensorLike) -> Tensor: ...
 
     def __sub__(self, other: Tensor | float | int | bool) -> Tensor:
         return _binary_kernel_op(self, other, _C.subtract)
@@ -356,11 +377,9 @@ class Tensor:
             other = Tensor(other)
         return other.__sub__(self)
 
-    def __mul__(self, other: Tensor | float | int | bool) -> Tensor:
-        return _binary_kernel_op(self, other, _C.multiply)
+    def __mul__(self, other: Tensor | float | int | bool) -> Tensor: ...
 
-    def __rmul__(self, other: Tensor | float | int | bool) -> Tensor:
-        return self.__mul__(other)
+    def __rmul__(self, other: Tensor | float | int | bool) -> Tensor: ...
 
     def __truediv__(self, other: Tensor | float | int | bool) -> Tensor:
         return _binary_kernel_op(self, other, _C.divide)
@@ -396,37 +415,7 @@ class Tensor:
         keepdim: bool = False,
         *,
         dtype: DataType | None = None,
-    ) -> Tensor:
-        """Compute per-coef sum of tensor coefficients."""
-        if axis is None:
-            axis = tuple(range(self.ndim))
-        elif isinstance(axis, int):
-            axis = (axis,)
-        axis = tuple(ax + self.ndim if ax < 0 else ax for ax in axis)
-        if any(not isinstance(ax, int) for ax in axis):
-            raise TypeError(f"Invalid axis: {axis}")
-        if len(set(axis)) != len(axis):
-            raise ValueError(f"Redundant axes: {axis}")
-        if any(ax < 0 or ax >= self.ndim for ax in axis):
-            raise IndexError(f"Invalid axis: {axis}")
-        if keepdim:
-            new_shape = tuple(1 if i in axis else s for i, s in enumerate(self.shape))
-        else:
-            new_shape = tuple(s for i, s in enumerate(self.shape) if i not in axis)
-
-        if dtype is None:
-            dtype = max(self.dtype, DataType.INT64)
-
-        if self.is_empty:
-            return Tensor._new_contiguous(
-                dtype, new_shape, _C.zeros(new_shape, dtype.cpp_dtype)
-            )
-
-        return Tensor._new_contiguous(
-            dtype=dtype,
-            shape=new_shape,
-            storage=_C.sum(self._C_view, axis, keepdim, dtype.cpp_dtype),
-        )
+    ) -> Tensor: ...
 
     def mean(
         self,
@@ -443,19 +432,9 @@ class Tensor:
         sum_ = self.sum(axis=axis, keepdim=keepdim, dtype=dtype)
         return sum_ / (self.numel // sum_.numel)
 
-    def exp(self) -> Tensor:
-        """Apply coefficient-wise exponential."""
-        if self.is_empty:
-            return self
-        dtype = promote_dtypes(self.dtype, DataType.FP32)
-        return Tensor._new_contiguous(dtype, self.shape, _C.exp(self.to(dtype)._C_view))
+    def exp(self) -> Tensor: ...
 
-    def log(self) -> Tensor:
-        """Apply coefficient-wise exponential."""
-        if self.is_empty:
-            return self
-        dtype = promote_dtypes(self.dtype, DataType.FP32)
-        return Tensor._new_contiguous(dtype, self.shape, _C.log(self.to(dtype)._C_view))
+    def log(self) -> Tensor: ...
 
     def pow(self, exponent: float | int | bool | Tensor) -> Tensor:
         """Apply coefficient-wise exponential."""
@@ -478,6 +457,49 @@ class Tensor:
         if not isinstance(other, Tensor):
             other = Tensor(other)
         return other.pow(self)
+
+    # Autograd
+
+    @property
+    def requires_grad(self) -> bool:
+        """This tensor tracks gradients."""
+        return self._requires_grad or self.grad_fn is not None
+
+    @property
+    def is_leaf(self) -> bool:
+        """This tensor does not come from other tensors."""
+        return self.grad_fn is None
+
+    @property
+    def grad(self) -> Tensor | None:
+        """Stored gradients, if any."""
+        return self._grad
+
+    @property
+    def grad_fn(self) -> Function | None:
+        """If non-leaf tensor, grad-bearing function to backprop through."""
+        return self._grad_fn
+
+    def backward(self) -> None:
+        """Backpropagate scalar tensor gradients through the gradient graph."""
+        if not self.requires_grad:
+            raise RuntimeError(
+                "Cannot call .backward() on a tensor that does not require grad "
+                "and does not have a grad_fn."
+            )
+        if self.numel != 1:
+            raise RuntimeError(
+                f"Cannot call .backward() on a non-scalar tensor of shape {self.shape}"
+            )
+        self._grad = Tensor(1.0, dtype=self.dtype)
+        if self.shape != ():
+            self._grad = self._grad.reshape(*self.shape)
+        if not self.is_leaf:
+            _backpropagate_grad(self)
+
+    def attach_grad_fn(self, grad_fn: Function) -> None:
+        """Attach a differentiable functions and parent tensors."""
+        self._grad_fn = grad_fn
 
     # Private operators
 
@@ -781,6 +803,47 @@ def _newview_indexing(
     return Tensor._new_view(
         x.dtype, tuple(new_shape), x._data, tuple(new_strides), offset
     ), tuple(new_index)
+
+
+# Backprop
+
+
+def _backpropagate_grad(seed: Tensor) -> None:
+    """Backpropagate a value through differentiable functions."""
+    # Gather nodes via BFS
+    to_visit = [seed]
+    sorted_nodes: list[tuple[Tensor, Function, tuple[Tensor, ...]]] = []
+    while to_visit:
+        f_x = to_visit.pop(0)
+        grad_fn = f_x.grad_fn
+        if grad_fn is None or grad_fn.saved_tensors is None:
+            continue
+        inputs = []
+        for x in grad_fn.saved_tensors:
+            if isinstance(x, Tensor):
+                to_visit.append(x)
+                inputs.append(x)
+        sorted_nodes.append((f_x, grad_fn, tuple(inputs)))
+
+    # Propagate the gradients
+    to_cleanup: list[Tensor] = []
+    if not seed.is_leaf:
+        to_cleanup.append(seed)
+    for f_x, grad_fn, inputs in sorted_nodes:
+        if f_x.grad is None:
+            raise RuntimeError("f_x.grad is None.")
+        grads = grad_fn.backward(f_x.grad)
+        for x, grad in zip(inputs, grads):
+            if x._grad is None:
+                x._grad = grad
+                if not x.is_leaf:
+                    to_cleanup.append(x)
+            else:
+                x._grad += grad
+
+    # Cleanup TODO: find a more efficient way to cleanup inline
+    for x in to_cleanup:
+        x._grad = None
 
 
 TensorIndex = (

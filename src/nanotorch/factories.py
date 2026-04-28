@@ -6,9 +6,11 @@ from . import _data_type as dt
 from .core import DataType, InputType, Tensor, TensorShape
 
 
-def tensor(data: InputType, dtype: DataType | None = None) -> Tensor:
+def tensor(
+    data: InputType, dtype: DataType | None = None, requires_grad: bool = False
+) -> Tensor:
     """Initialize a new tensor."""
-    return Tensor(data, dtype)
+    return Tensor(data, dtype, requires_grad)
 
 
 def zeros(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
