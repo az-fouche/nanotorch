@@ -1,13 +1,13 @@
 """Autograd engine."""
 
 from .function import Function
-from .ops import FunctionAdd, FunctionExp, FunctionLog, FunctionMul, FunctionSum
+from .ops import AddOp, ExpOp, LogOp, MulOp, SumOp
 
 __all__ = [
     "Function",
-    "FunctionAdd",
-    "FunctionMul",
-    "FunctionExp",
-    "FunctionLog",
-    "FunctionSum",
+    "AddOp",
+    "MulOp",
+    "ExpOp",
+    "LogOp",
+    "SumOp",
 ]

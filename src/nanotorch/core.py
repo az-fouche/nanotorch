@@ -1,4 +1,4 @@
-"""Base tensor class."""
+"""Base tensor class and core operations."""
 
 from __future__ import annotations
 
@@ -26,14 +26,21 @@ MAX_TENSOR_LEVEL = 32
 class Tensor:
     """Base tensor class.
 
+    Nanotorch tensors are typed n-dimensional arrays with native autograd
+    support and core operations.
+
     Parameters
     ----------
-    data: TensorInputType
-        Tensor coefficients (scalar or list-like).
+    data: list | float | int | bool | ArrayLike
+        Tensor coefficients, can be scalar or list-like, provided as python
+        native types. Also supports any array-like structure from torch/numpy/jax/pandas.
+        Only numerical data formats are supported.
     dtype: DataType
-        Data type (optional, otherwise will be autodetected).
+        Data type to cast the values to. If not set, the tensor will be promoted
+        to the most precise data type following the DataTypes enum order.
     requires_grad: bool
-        Enables autograd for this tensor and all tensors constructed from it.
+        Enables autograd for this tensor, and all tensors constructed from it
+        through differentiable operations.
     """
 
     def __init__(
@@ -42,6 +49,10 @@ class Tensor:
         dtype: DataType | None = None,
         requires_grad: bool = False,
     ):
+        # Auto-detect numpy-like -- TODO: share memoryview
+        if hasattr(data, "__array__") and hasattr(data, "tolist"):
+            data = data.tolist()  # type: ignore
+
         # Strided 1D view
         dtype, shape, storage = _extract_tensor_data(data, dtype)
         self._dtype = dtype
@@ -61,7 +72,7 @@ class Tensor:
     def _new_contiguous(
         cls, dtype: DataType, shape: TensorShape, storage: _C.Storage
     ) -> Tensor:
-        """Intializes a new contiguous tensor from precomputed components."""
+        """Intializes a new contiguous tensor from storage and shape."""
         return cls._new_view(dtype, shape, storage, None, None)
 
     @classmethod
@@ -73,7 +84,7 @@ class Tensor:
         strides: TensorShape | None,
         offset: int | None,
     ) -> Tensor:
-        """Intializes a new tensor from precomputed components."""
+        """Intializes a new tensor view from components."""
 
         strides = _infer_strides(shape) if strides is None else strides
         offset = 0 if offset is None else offset
@@ -125,6 +136,7 @@ class Tensor:
         return f"nt.Tensor(shape={self.shape}, {self.numel} x <{self.dtype.name}>)"
 
     def __len__(self):
+        """Number of elements over the first tensor dimension (row-first)."""
         if not len(self._shape):
             return 0
         return self._shape[0]
@@ -251,7 +263,13 @@ class Tensor:
         )
 
     def to(self, target: DataType) -> Tensor:
-        """Cast the tensor to a new DataType, leaves inplace if no cast needed."""
+        """Cast the tensor to a new DataType, leaves inplace if no cast needed.
+
+        Parameters
+        ----------
+        target: DataType
+            Nanotorch data type to cast the tensor to.
+        """
         if target == self.dtype:
             return self
         this = self
@@ -263,11 +281,33 @@ class Tensor:
         )
 
     def clone(self) -> Tensor:
-        """Returns a copy of the tensor."""
-        return Tensor(self.tolist(), self.dtype)
+        """Returns a new copy of the tensor.
+
+        Parameters
+        ----------
+        x: Tensor
+            Tensor to copy.
+        """
+        if self._is_contiguous(full_span=True):
+            return Tensor._new_contiguous(self.dtype, self.shape, self._data.clone())
+        return self._to_contiguous(force=True)
 
     def reshape(self, *dims: int) -> Tensor:
-        """Returns a reshaped view (no copy)."""
+        """Returns a reshaped view of the tensor (does not copy).
+
+        Parameters
+        ----------
+        x: Tensor
+            Tensor to reshape.
+        dims: *int
+            New shape dimensions, prod(dims) should equal tensor's number of
+            elements, otherwise reshape raises a ValueError.
+
+        Returns
+        -------
+        Tensor
+            Reshaped tensor view.
+        """
         if math.prod(dims) != self.numel:
             raise ValueError(f"Can't reshape {self.shape} into {dims}.")
         if len(dims) == 0:
@@ -280,8 +320,24 @@ class Tensor:
         )
 
     def transpose(self, dim0: int, dim1: int) -> Tensor:
-        """Permutes two tensor dimensions."""
+        """Permutes two tensor dimensions (does not copy).
+
+        Parameters
+        ----------
+        x: Tensor
+            Tensor to transpose.
+        dim0: int
+            Index of the first dimension to permute.
+        dim1:
+            Index of the second dimension to permute.
+
+        Returns
+        -------
+            Tensor view with swapped dimensions.
+        """
         if len(self.shape) < 2:
+            return self
+        if dim0 == dim1:
             return self
         shape, strides = list(self.shape), list(self._strides)
         shape[dim0], shape[dim1], strides[dim0], strides[dim1] = (
@@ -299,7 +355,15 @@ class Tensor:
         )
 
     def expand(self, shape: TensorShape) -> Tensor:
-        """Expand the tensor to target shape, no copy."""
+        """Expand the tensor to target shape, no copy.
+
+        Parameters
+        ----------
+        shape: tuple[int, ...]
+            Shape to expand the tensor to, last dimensions must match the tensor
+            dimension. If tensor dimension self.shape[i] is 1, it is broadcasted to
+            shape[i].
+        """
         if len(shape) < self.ndim:
             raise ValueError(f"Cannot broadcast {self.shape} to {shape}.")
         strides = list(self._strides)
@@ -321,25 +385,50 @@ class Tensor:
         )
 
     def flatten(self) -> Tensor:
-        """Flattens into a 1D tensor."""
+        """Flattens into a 1D tensor, (2, 2, 2) -> (8,).
+
+        Parameters
+        ----------
+        x: Tensor
+            Tensor to flatten, shape (s1, ..., sk).
+
+        Returns
+        -------
+        Tensor
+            Flattened tensor view of shape (s1 * ... * sk,)
+        """
         return self.reshape(self.numel)
 
-    def equals(self, other: Tensor) -> bool:
-        """Test per-coefficient equality, auto-promotes to best dtype."""
-        if self.shape != other.shape:
+    def equals(self, x2: Tensor) -> bool:
+        """Test per-coefficient equality, auto-promotes to best dtype.
+
+        Parameters
+        ----------
+        x1: Tensor
+            Target tensor.
+        x2: Tensor
+            Target tensor.
+
+        Returns
+        -------
+        bool
+            Return True if tensors are equal in shape and in values (dtype can
+            differ, True == 1 == 1.0).
+        """
+        if self.shape != x2.shape:
             return False
-        if self.is_empty and other.is_empty:
+        if self.is_empty and x2.is_empty:
             return True
-        promote_type = promote_dtypes(self.dtype, other.dtype)
+        promote_type = promote_dtypes(self.dtype, x2.dtype)
         first = self
         if promote_type != self.dtype:
             first = self.to(promote_type)
-        if promote_type != other.dtype:
-            other = other.to(promote_type)
-        return _C.equals(first._C_view, other._C_view)
+        if promote_type != x2.dtype:
+            x2 = x2.to(promote_type)
+        return _C.equals(first._C_view, x2._C_view)
 
     def tolist(self) -> InputType:
-        """Converts the tensor to a list, preserving shape and type."""
+        """Converts the tensor to a scalar or list, preserving shape and type."""
         storage = memoryview(self._data)
 
         def rec(
@@ -357,7 +446,7 @@ class Tensor:
         return rec(self.shape, self._strides, self._offset, 0)
 
     def item(self) -> bool | int | float:
-        """Converts a single element tensor to a scalar."""
+        """Extracts a single element tensor to a python scalar (!!expensive!!)."""
         if self.numel != 1:
             raise RuntimeError(f"Cannot convert {self} to a scalar.")
         storage = memoryview(self._data)
@@ -365,11 +454,50 @@ class Tensor:
 
     # Tensor ops -- bound in nanotorch.__init__
 
-    def __add__(self, other: TensorLike) -> Tensor: ...
+    def __add__(self, other: TensorLike) -> Tensor:
+        """Add two tensors component-wise with broadcast.
+
+        Output tensor y is promoted and broadcast to the best suited dtype and shape
+        to prevent loss of information and ensure compatibility. Broadcasting is
+        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
+        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
+
+        Parameters
+        ----------
+        x1: Tensor
+            First term, shape S.
+        x2: Tensor
+            Second term, shape T.
+
+        Returns
+        -------
+        Tensor
+            New tensor containing the coordinate-wise addition.
+        """
+        ...
 
     def __radd__(self, other: TensorLike) -> Tensor: ...
 
     def __sub__(self, other: Tensor | float | int | bool) -> Tensor:
+        """Subtract two tensors component-wise with broadcast.
+
+        Output tensor y is promoted and broadcast to the best suited dtype and shape
+        to prevent loss of information and ensure compatibility. Broadcasting is
+        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
+        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
+
+        Parameters
+        ----------
+        x1: Tensor
+            First term, shape S.
+        x2: Tensor
+            Second term, shape T.
+
+        Returns
+        -------
+        Tensor
+            New tensor containing the coordinate-wise subtraction.
+        """
         return _binary_kernel_op(self, other, _C.subtract)
 
     def __rsub__(self, other: Tensor | float | int | bool) -> Tensor:
@@ -377,11 +505,52 @@ class Tensor:
             other = Tensor(other)
         return other.__sub__(self)
 
-    def __mul__(self, other: Tensor | float | int | bool) -> Tensor: ...
+    def __mul__(self, other: Tensor | float | int | bool) -> Tensor:
+        """Multiply two tensors component-wise with broadcast.
+
+        Output tensor y is promoted and broadcast to the best suited dtype and shape
+        to prevent loss of information and ensure compatibility. Broadcasting is
+        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
+        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
+
+        Parameters
+        ----------
+        x1: Tensor
+            First term, shape S.
+        x2: Tensor
+            Second term, shape T.
+
+        Returns
+        -------
+        Tensor
+            New tensor containing the coordinate-wise multiplication.
+        """
+        ...
 
     def __rmul__(self, other: Tensor | float | int | bool) -> Tensor: ...
 
     def __truediv__(self, other: Tensor | float | int | bool) -> Tensor:
+        """Floating point division with broadcast.
+
+        Output tensor y is promoted and broadcast to the best suited dtype and shape
+        to prevent loss of information and ensure compatibility. Broadcasting is
+        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
+        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
+
+        Note: 1 / tensor(0.0) => tensor(inf) -- no error raised
+
+        Parameters
+        ----------
+        x1: Tensor
+            First term, shape S.
+        x2: Tensor
+            Second term, shape T.
+
+        Returns
+        -------
+        Tensor
+            New tensor containing the coordinate-wise division.
+        """
         return _binary_kernel_op(self, other, _C.divide)
 
     def __rtruediv__(self, other: Tensor | float | int | bool) -> Tensor:
@@ -390,9 +559,24 @@ class Tensor:
         return other.__truediv__(self)
 
     def __neg__(self) -> Tensor:
+        """Invert the sign of all the elements of a tensor."""
         return self.__mul__(-1)
 
     def __matmul__(self, other: Tensor) -> Tensor:
+        """Standard 2D matrix multiplication (nD not supported yet).
+
+        Parameters
+        ----------
+        x1: Tensor
+            First term, shape (a, b)
+        x2: Tensor
+            Second term, shape (b, c)
+
+        Returns
+        -------
+        Tensor
+            New tensor of shape (a, c) containing x1 @ x2.
+        """
         this = self
         if this.ndim != 2 or other.ndim != 2:
             raise ValueError("Only 2D matmul is supported.")
@@ -415,7 +599,27 @@ class Tensor:
         keepdim: bool = False,
         *,
         dtype: DataType | None = None,
-    ) -> Tensor: ...
+    ) -> Tensor:
+        """Sum the tensor elements along one or more axes.
+
+        Parameters
+        ----------
+        x: Tensor
+            Target tensor.
+        axis: int | tuple[int, ...] | None
+            Axes index to sum along, integer is interpreted as (n,), None as all axes.
+            Dimensions of these axes are collapsed by the operation.
+        keepdim: bool
+            Instead of collapsing target axes, keeps the axis with shape[i] = 1.
+        dtype: DataType | None
+            Casts the resulting sum to this data type.
+
+        Returns
+        -------
+        Tensor
+            New tensor of containing the summed coefficients.
+        """
+        ...
 
     def mean(
         self,
@@ -424,7 +628,25 @@ class Tensor:
         *,
         dtype: DataType | None = None,
     ) -> Tensor:
-        """Compute per-coef sum of tensor coefficients."""
+        """Averages the tensor elements along one or more axes.
+
+        Parameters
+        ----------
+        x: Tensor
+            Target tensor.
+        axis: int | tuple[int, ...] | None
+            Axes index to average along, integer is interpreted as (n,), None as all axes.
+            Dimensions of these axes are collapsed by the operation.
+        keepdim: bool
+            Instead of collapsing target axes, keeps the axis with shape[i] = 1.
+        dtype: DataType | None
+            Casts the resulting mean to this data type.
+
+        Returns
+        -------
+        Tensor
+            New tensor of containing the averaged coefficients.
+        """
         if dtype is None:
             dtype = self.dtype
         if dtype < DataType.FP32:
@@ -432,12 +654,51 @@ class Tensor:
         sum_ = self.sum(axis=axis, keepdim=keepdim, dtype=dtype)
         return sum_ / (self.numel // sum_.numel)
 
-    def exp(self) -> Tensor: ...
+    def exp(self) -> Tensor:
+        """Exponentiate all tensor coefficients.
 
-    def log(self) -> Tensor: ...
+        Parameters
+        ----------
+        x: Tensor
+            Target tensor to exponentiate.
+
+        Returns
+        -------
+        Tensor
+            Exponentiated tensor, cast to floating point if necessary.
+        """
+        ...
+
+    def log(self) -> Tensor:
+        """Logarithmize (Napierian) all tensor coefficients.
+
+        Parameters
+        ----------
+        x: Tensor
+            Target tensor to logarithmize.
+
+        Returns
+        -------
+        Tensor
+            Logarithmized tensor, cast to floating point if necessary.
+        """
+        ...
 
     def pow(self, exponent: float | int | bool | Tensor) -> Tensor:
-        """Apply coefficient-wise exponential."""
+        """Raises all tensor coefficients to a given exponent.
+
+        Parameters
+        ----------
+        x: Tensor
+            Target tensor.
+        exponent: Tensor | float | int | bool
+            Exponent, must be scalar-like.
+
+        Returns
+        -------
+        Tensor
+            Resulting tensor.
+        """
         if self.is_empty:
             return self
         if not isinstance(exponent, Tensor):
@@ -523,6 +784,30 @@ class Tensor:
     def _C_view(self) -> _C.TensorView:
         """Return a C++-compatible tensor view."""
         return _C.TensorView(self._data, self.shape, self._strides, self._offset)
+
+
+def inherit_doc(source):
+    """Copies the docstring of source into the decorated element.
+
+    Usage
+    -----
+    >>> def f1():
+    >>>     '''Some docstring'''
+    >>>     return 0
+
+    >>> @inherit_doc(f1)
+    >>> def f2():
+    >>>     return 1
+
+    >>> print(f2.__doc__)
+    >>> '''Some docstring'''
+    """
+
+    def wrap(fn):
+        fn.__doc__ = source.__doc__
+        return fn
+
+    return wrap
 
 
 # Private functions

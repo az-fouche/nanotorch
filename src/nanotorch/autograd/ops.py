@@ -1,3 +1,5 @@
+"""Usual differentiable tensor operations and their derivative."""
+
 from typing import Callable
 
 from nanotorch import _C
@@ -8,7 +10,7 @@ from nanotorch.core import Tensor, TensorLike
 from .function import Function
 
 
-class FunctionAdd(Function):
+class AddOp(Function):
     """y = x1 + x2 functor."""
 
     def forward(self, x1: Tensor, x2: TensorLike) -> Tensor:
@@ -31,7 +33,7 @@ class FunctionAdd(Function):
         return tuple(out)
 
 
-class FunctionMul(Function):
+class MulOp(Function):
     """y = x1 * x2 functor."""
 
     def forward(self, x1: Tensor, x2: TensorLike) -> Tensor:
@@ -54,7 +56,7 @@ class FunctionMul(Function):
         )
 
 
-class FunctionExp(Function):
+class ExpOp(Function):
     """y = e^x functor."""
 
     def forward(self, x: Tensor) -> Tensor:
@@ -75,7 +77,7 @@ class FunctionExp(Function):
         return (grad_out * e_x,)
 
 
-class FunctionLog(Function):
+class LogOp(Function):
     """y = log(x) functor."""
 
     def forward(self, x: Tensor) -> Tensor:
@@ -95,7 +97,7 @@ class FunctionLog(Function):
         return (grad_out * x**-1,)
 
 
-class FunctionSum(Function):
+class SumOp(Function):
     """y = sum(x, axis=...) functor."""
 
     def forward(

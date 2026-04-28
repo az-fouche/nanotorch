@@ -1,4 +1,6 @@
+import numpy as np
 import pytest
+import torch
 
 import nanotorch as nt
 
@@ -185,6 +187,24 @@ def test_tensor_fp32_precision_loss():
     x = nt.tensor(0.01, dtype=nt.float64)
     y = x.to(nt.float32).to(nt.float64)
     assert not x.equals(y)
+
+
+@pytest.mark.parametrize(
+    "input,factory,dtype,expected",
+    [
+        ([1, 2, 3], np.array, nt.int64, [1, 2, 3]),
+        ([1, 2, 3], torch.tensor, nt.int64, [1, 2, 3]),
+        ([1.0, 2.0, 3.0], np.array, nt.float32, [1, 2, 3]),
+        ([1.0, 2.0, 3.0], torch.tensor, nt.float32, [1, 2, 3]),
+        ([True, True, False], np.array, nt.bool_, [True, True, False]),
+        ([True, True, False], torch.tensor, nt.bool_, [True, True, False]),
+    ],
+)
+def test_init_from_exotic_formats(input, factory, dtype, expected):
+    x = factory(input)
+    y = nt.tensor(x)  # type: ignore
+    assert y.dtype == dtype
+    assert y.tolist() == expected
 
 
 # __getitem__: single index

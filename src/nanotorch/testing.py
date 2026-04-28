@@ -2,6 +2,7 @@ import nanotorch as nt
 
 
 def assert_allclose(x1: nt.Tensor, x2: nt.Tensor, tol: float = 1e-6) -> None:
+    """Asserts x1 and x2 are identical tensor up to $tol difference."""
     if x1.shape != x2.shape:
         raise AssertionError("Shapes do not match!")
     x1f, x2f = x1.flatten().tolist(), x2.flatten().tolist()

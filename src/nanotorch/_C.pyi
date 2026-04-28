@@ -1,3 +1,5 @@
+"""Main interface for C++ kernel symbols."""
+
 import enum
 from typing import Sequence
 
@@ -12,22 +14,30 @@ class Dtype(enum.Enum):
     Float32 = 3
     Float64 = 4
 
-# Layout contract: flattened array representations
 class Storage(Buffer):
+    """Pointer to a 1D contiguous, typed memory segment."""
     @staticmethod
-    def allocate(n: int, dtype: Dtype) -> "Storage": ...
+    def allocate(n: int, dtype: Dtype) -> "Storage":
+        """Allocate a new storage of given size (# of elements) and dtype."""
     @staticmethod
-    def from_iterable(s: Sequence[bool | int | float], dtype: Dtype) -> "Storage": ...
+    def from_iterable(s: Sequence[bool | int | float], dtype: Dtype) -> "Storage":
+        """Allocate a new storage from a sequence of python elements."""
     @property
-    def size(self) -> int: ...
+    def size(self) -> int:
+        """Number of elements in the storage."""
     @property
-    def itemsize(self) -> int: ...
+    def itemsize(self) -> int:
+        """Memory size of one storage element, in bits."""
     @property
-    def dtype(self) -> Dtype: ...
-    def clone(self) -> "Storage": ...
-    def cast(self, dtype: Dtype) -> "Storage": ...
+    def dtype(self) -> Dtype:
+        """Type of elements in the storage."""
+    def clone(self) -> "Storage":
+        """Clone the storage."""
+    def cast(self, dtype: Dtype) -> "Storage":
+        """Cast the storage to a new dtype, returns a new storage if type changes."""
 
 class TensorView:
+    """C++ representation of a strided tensor."""
     def __init__(
         self,
         storage: Storage,

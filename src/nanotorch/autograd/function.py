@@ -1,10 +1,17 @@
+"""Base class for all derivable tensor operations."""
+
 from typing import Any
 
 from nanotorch.core import Tensor, TensorLike
 
 
 class Function:
-    """Differentiable function."""
+    """Base class for all derivable tensor operations.
+
+    Defines generic binding behaviors with apply(*inputs) and tensor stashing
+    with save_for_backward(*tensors_like). All operations should be bound at
+    module initialization in nanotorch/__init__.py to avoid circular imports.
+    """
 
     def __init__(self):
         self._saved_tensors: tuple[TensorLike, ...] | None = None
@@ -32,13 +39,13 @@ class Function:
         return output
 
     def save_for_backward(self, *tensors: TensorLike) -> None:
-        """Registers tensors for backward op."""
+        """Registers tensors for backward op, can be queried with saved_tensors."""
         self._saved_tensors = tuple(tensors)
 
     def forward(self, *inputs: Any) -> Tensor:
-        """Wraps ops forward."""
+        """Defines ops forward (op-specific)."""
         raise NotImplementedError
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor]:
-        """Defines ops backward."""
+        """Defines ops backward (op-specific)."""
         raise NotImplementedError

@@ -8,7 +8,15 @@ InputType = list | float | int | bool
 
 
 class DataType(Enum):
-    """Supported tensor data types."""
+    """Supported tensor data types.
+
+    Defines the data types allowed in nanotorch tensors. DataType supports comparison
+    to detect promotions:
+    - if x < y, then x can be cast to y without loss of precision (can overflow)
+    - if x > y, then casting x to y will likely result in a loss of precision.
+
+    Handles the automatic conversion with python types and C++ types.
+    """
 
     # Promotion priority
     BOOL = 0
@@ -30,6 +38,7 @@ class DataType(Enum):
 
     @property
     def cpp_dtype(self) -> _C.Dtype:
+        """Data type compatible with C++ kernels."""
         match self:
             case DataType.BOOL:
                 return _C.Dtype.Bool
@@ -46,6 +55,7 @@ class DataType(Enum):
 
     @classmethod
     def from_cpp(cls, cpptype: _C.Dtype):
+        """Convert C++ kernel data type to nanotorch data type."""
         match cpptype:
             case _C.Dtype.Bool:
                 return DataType.BOOL
@@ -93,6 +103,7 @@ def promote_dtypes(*dtypes: DataType) -> DataType:
     return max(dtypes)  # type: ignore
 
 
+# Syntactic sugar (nt.bool_)
 bool_ = DataType.BOOL
 int32 = DataType.INT32
 int64 = DataType.INT64
