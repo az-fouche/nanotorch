@@ -16,11 +16,11 @@ def test_empty(factory):
     [
         (nt.zeros, 0.0),
         (nt.ones, 1.0),
-        (lambda shape: nt.full(shape, 3.14), 3.14),
+        (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
 def test_zeros_scalar(factory, expected):
-    x = factory(())
+    x = factory()
     assert x.tolist() == pytest.approx(expected)
     assert x.shape == ()
     assert x.dtype == nt.float32
@@ -31,11 +31,11 @@ def test_zeros_scalar(factory, expected):
     [
         (nt.zeros, 0.0),
         (nt.ones, 1.0),
-        (lambda shape: nt.full(shape, 3.14), 3.14),
+        (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
 def test_zeros_1d(factory, expected):
-    x = factory((3,))
+    x = factory(3)
     assert x.tolist() == [pytest.approx(expected) for _ in range(3)]
     assert x.shape == (3,)
     assert x.dtype == nt.float32
@@ -46,11 +46,11 @@ def test_zeros_1d(factory, expected):
     [
         (nt.zeros, 0.0),
         (nt.ones, 1.0),
-        (lambda shape: nt.full(shape, 3.14), 3.14),
+        (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
 def test_zeros_2d(factory, expected):
-    x = factory((3, 5))
+    x = factory(3, 5)
     assert x.tolist() == [[pytest.approx(expected) for _ in range(5)] for _ in range(3)]
     assert x.shape == (3, 5)
     assert x.dtype == nt.float32
@@ -61,11 +61,11 @@ def test_zeros_2d(factory, expected):
     [
         (nt.zeros, 0.0),
         (nt.ones, 1.0),
-        (lambda shape: nt.full(shape, 3.14), 3.14),
+        (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
 def test_zeros_3d(factory, expected):
-    x = factory((3, 5, 2))
+    x = factory(3, 5, 2)
     assert x.tolist() == [
         [[pytest.approx(expected) for _ in range(2)] for _ in range(5)]
         for _ in range(3)
@@ -87,15 +87,23 @@ def test_zeros_3d(factory, expected):
         (nt.ones, 1, nt.int64),
         (nt.ones, 1.0, nt.float32),
         (nt.ones, 1.0, nt.float64),
-        (lambda shape, dtype: nt.full(shape, 3.14, dtype), True, nt.bool_),
-        (lambda shape, dtype: nt.full(shape, 3.14, dtype), 3, nt.int32),
-        (lambda shape, dtype: nt.full(shape, 3.14, dtype), 3, nt.int64),
-        (lambda shape, dtype: nt.full(shape, 3.14, dtype), 3.14, nt.float32),
-        (lambda shape, dtype: nt.full(shape, 3.14, dtype), 3.14, nt.float64),
+        (lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype), True, nt.bool_),
+        (lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype), 3, nt.int32),
+        (lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype), 3, nt.int64),
+        (
+            lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype),
+            3.14,
+            nt.float32,
+        ),
+        (
+            lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype),
+            3.14,
+            nt.float64,
+        ),
     ],
 )
 def test_zeros_dtype(factory, expected, dtype):
-    x = factory((3,), dtype=dtype)
+    x = factory(3, dtype=dtype)
     assert x.tolist() == [pytest.approx(expected) for _ in range(3)]
     assert x.shape == (3,)
     assert x.dtype == dtype

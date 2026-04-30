@@ -13,7 +13,7 @@ def tensor(
     return Tensor(data, dtype, requires_grad)
 
 
-def zeros(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
+def zeros(*shape: int, dtype: DataType = dt.float32) -> Tensor:
     """Initialize a new tensor filled with zeros.
 
     Parameters
@@ -28,7 +28,7 @@ def zeros(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
     return Tensor._new_contiguous(dtype, shape, _C.zeros(shape, dtype.cpp_dtype))
 
 
-def ones(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
+def ones(*shape: int, dtype: DataType = dt.float32) -> Tensor:
     """Initialize a new tensor filled with ones.
 
     Parameters
@@ -44,7 +44,7 @@ def ones(shape: int | TensorShape, dtype: DataType = dt.float32) -> Tensor:
 
 
 def full(
-    shape: int | TensorShape,
+    *shape: int,
     value: bool | int | float,
     dtype: DataType = dt.float32,
 ) -> Tensor:
