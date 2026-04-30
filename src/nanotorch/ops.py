@@ -62,7 +62,7 @@ def sum(
     keepdim: bool = False,
     *,
     dtype: DataType | None = None,
-):
+) -> Tensor:
     return x.sum(axis, keepdim, dtype=dtype)
 
 
@@ -73,20 +73,20 @@ def mean(
     keepdim: bool = False,
     *,
     dtype: DataType | None = None,
-):
+) -> Tensor:
     return x.mean(axis, keepdim, dtype=dtype)
 
 
 @inherit_doc(Tensor.exp)
-def exp(x: Tensor):
+def exp(x: Tensor) -> Tensor:
     return x.exp()
 
 
 @inherit_doc(Tensor.log)
-def log(x: Tensor):
+def log(x: Tensor) -> Tensor:
     return x.log()
 
 
 @inherit_doc(Tensor.pow)
-def pow(x: Tensor, exponent: Tensor | float | int | bool):
+def pow(x: Tensor, exponent: Tensor | float | int | bool) -> Tensor:
     return x.pow(exponent)

@@ -28,9 +28,11 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> exp(const TensorView& x);
 std::shared_ptr<Storage> log(const TensorView& x);
 std::shared_ptr<Storage> pow(const TensorView& x, Scalar value);
+std::shared_ptr<Storage> relu(const TensorView& x);
 
-// Core ops
+// Special
 bool equals(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> greater(const TensorView& x, Scalar value);
 void copy_view(const TensorView& src, const TensorView& dst);
 void scatter_to_axes(
     const TensorView& src, 

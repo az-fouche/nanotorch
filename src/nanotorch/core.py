@@ -505,7 +505,7 @@ class Tensor:
         Tensor
             New tensor containing the coordinate-wise subtraction.
         """
-        return _binary_kernel_op(self, other, _C.subtract)
+        ...
 
     def __rsub__(self, other: Tensor | float | int | bool) -> Tensor:
         if not isinstance(other, Tensor):
@@ -584,18 +584,7 @@ class Tensor:
         Tensor
             New tensor of shape (a, c) containing x1 @ x2.
         """
-        this = self
-        if this.ndim != 2 or other.ndim != 2:
-            raise ValueError("Only 2D matmul is supported.")
-        if this.shape[1] != other.shape[0]:
-            raise ValueError(f"Cannot multiply {this.shape} @ {other.shape}.")
-        shape = (this.shape[0], other.shape[1])
-        dtype = promote_dtypes(this.dtype, other.dtype)
-        this = this.to(dtype)
-        other = other.to(dtype)
-        return Tensor._new_contiguous(
-            dtype=dtype, shape=shape, storage=_C.matmul(this._C_view, other._C_view)
-        )
+        ...
 
     def __rmatmul__(self, other: Tensor) -> Tensor:
         return other.__matmul__(self)
@@ -654,12 +643,7 @@ class Tensor:
         Tensor
             New tensor of containing the averaged coefficients.
         """
-        if dtype is None:
-            dtype = self.dtype
-        if dtype < DataType.FP32:
-            raise TypeError("Cannot take mean of integer tensor, cast to fp.")
-        sum_ = self.sum(axis=axis, keepdim=keepdim, dtype=dtype)
-        return sum_ / (self.numel // sum_.numel)
+        ...
 
     def exp(self) -> Tensor:
         """Exponentiate all tensor coefficients.
@@ -706,17 +690,7 @@ class Tensor:
         Tensor
             Resulting tensor.
         """
-        if self.is_empty:
-            return self
-        if not isinstance(exponent, Tensor):
-            exponent = Tensor(exponent)
-        dtype = promote_dtypes(self.dtype, exponent.dtype)
-        exponent_fp = float(exponent.item())
-        if exponent_fp < 0 and dtype <= DataType.INT64:
-            raise RuntimeError("Cannot use negative exponent with integer tensor.")
-        return Tensor._new_contiguous(
-            dtype, self.shape, _C.pow(self.to(dtype)._C_view, exponent_fp)
-        )
+        ...
 
     def __pow__(self, other: Tensor | float | int | bool) -> Tensor:
         return self.pow(other)
@@ -768,6 +742,21 @@ class Tensor:
     def attach_grad_fn(self, grad_fn: Function) -> None:
         """Attach a differentiable functions and parent tensors."""
         self._grad_fn = grad_fn
+
+    def zero_grad(self) -> None:
+        """Reset grad to 0."""
+        self._grad = None
+
+    def enable_grad(self) -> None:
+        """Enables gradient tracking post-constructor."""
+        self._requires_grad = True
+
+    def sub_(self, x: Tensor) -> None:
+        """Inplace subtraction, will be deprecated for inplace ops."""
+        result = self - x
+        if not result._is_contiguous(full_span=True):
+            result = result._to_contiguous(force=True)
+        self._storage = result.storage
 
     # Private operators
 

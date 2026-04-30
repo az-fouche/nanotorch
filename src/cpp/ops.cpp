@@ -288,6 +288,16 @@ std::shared_ptr<Storage> pow(const TensorView& x, Scalar value) {
     return _unary_op_generic(x, [value]<class T>(T a) { return std::pow(a, value.item<T>()); });
 }
 
+std::shared_ptr<Storage> relu(const TensorView& x) {
+    return _unary_op_generic(x, []<class T>(T a) { return a > 0 ? a : 0; });
+}
+
+std::shared_ptr<Storage> greater(const TensorView& x, Scalar value) {
+    return _unary_op_generic(
+        x, [value]<class T>(T a) { return a > value.item<T>() ? T(1) : T(0); }
+    );
+}
+
 bool equals(const TensorView& x1, const TensorView& x2) {
     auto s1 = x1.storage;
     auto s2 = x2.storage;
@@ -538,6 +548,8 @@ void bind_ops_(py::module_& m) {
     m.def("exp", [](const TensorView& x) { return exp(x); }, "Component-wise exponentiation.", py::arg("x"));
     m.def("log", [](const TensorView& x) { return log(x); }, "Component-wise log.", py::arg("x"));
     m.def("pow", [](const TensorView& x, Scalar a) { return pow(x, a); }, "Component-wise power.", py::arg("x"), py::arg("a"));
+    m.def("relu", &relu, "Rectified linear unit.", py::arg("x"));
+    m.def("greater", &greater, "Per-coefficient strictly greater comparison.", py::arg("x"), py::arg("s"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );

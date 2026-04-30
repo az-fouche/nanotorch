@@ -87,7 +87,11 @@ def test_zeros_3d(factory, expected):
         (nt.ones, 1, nt.int64),
         (nt.ones, 1.0, nt.float32),
         (nt.ones, 1.0, nt.float64),
-        (lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype), True, nt.bool_),
+        (
+            lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype),
+            True,
+            nt.bool_,
+        ),
         (lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype), 3, nt.int32),
         (lambda *shape, dtype: nt.full(*shape, value=3.14, dtype=dtype), 3, nt.int64),
         (
@@ -169,3 +173,19 @@ def test_arange_start_step():
     assert x.tolist() == [7, 10, 13, 16, 19]
     assert x.shape == (5,)
     assert x.dtype == nt.int64
+
+
+def test_rand_scalar():
+    x = nt.rand()
+    assert x.shape == ()
+    assert 0 < x.item() < 1
+
+
+def test_rand_1d():
+    x = nt.rand(10)
+    assert x.shape == (10,)
+
+
+def test_rand_2d():
+    x = nt.rand(10, 5)
+    assert x.shape == (10, 5)
