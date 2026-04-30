@@ -11,74 +11,67 @@ from .function import Function
 
 
 class AddOp(Function):
-    """y = x1 + x2 functor."""
+    """y = x1 + x2 operation."""
 
     def forward(self, x1: Tensor, x2: TensorLike) -> Tensor:
-        if isinstance(x2, Tensor) and x2.requires_grad:
-            self.save_for_backward(x1, x2)
-        else:
-            self.save_for_backward(x1)
+        self._shapes = (x1.shape, x2.shape if isinstance(x2, Tensor) else None)
         return _binary_kernel_op(x1, x2, _C.add)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self.saved_tensors is None:
-            raise RuntimeError("Cannot backward with no saved tensors.")
-        if len(self.saved_tensors) > 2:
-            raise RuntimeError("Add function only supports 1 or 2 tensors.")
-        out = []
-        for x in self.saved_tensors:
-            if not isinstance(x, Tensor):
-                raise RuntimeError(f"Cannot backward through x of type {type(x)}.")
-            out.append(_unbroadcast(grad_out, x.shape))
-        return tuple(out)
-
-
-class MulOp(Function):
-    """y = x1 * x2 functor."""
-
-    def forward(self, x1: Tensor, x2: TensorLike) -> Tensor:
-        self.save_for_backward(x1, x2)
-        return _binary_kernel_op(x1, x2, _C.multiply)
-
-    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self.saved_tensors is None:
-            raise RuntimeError("Cannot backward with no saved tensors.")
-        if len(self.saved_tensors) > 2:
-            raise RuntimeError("Multiply function only supports 1 or 2 tensors.")
-        x1, x2 = self.saved_tensors  # type: ignore
-        if not isinstance(x1, Tensor):
-            raise RuntimeError(f"Cannot backward through x1 of type {type(x1)}.")
-        if not isinstance(x2, Tensor):
-            return (_unbroadcast(x2 * grad_out, x1.shape),)
-        return (
-            _unbroadcast(x2 * grad_out, x1.shape),
-            _unbroadcast(x1 * grad_out, x2.shape),
+        return tuple(
+            _unbroadcast(grad_out, shape) for shape in self._shapes if shape is not None
         )
 
 
+class MulOp(Function):
+    """y = x1 * x2 operation."""
+
+    def forward(self, x1: Tensor, x2: TensorLike) -> Tensor:
+        if isinstance(x2, Tensor):
+            self.save_for_backward(x1, x2)
+            self._x2 = None
+        else:
+            self.save_for_backward(x1)
+            self._x2 = x2
+        return _binary_kernel_op(x1, x2, _C.multiply)
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        match len(self.saved_tensors):
+            case 1:
+                if self._x2 is None:
+                    raise RuntimeError("x2 was not saved.")
+                return (self._x2 * grad_out,)
+            case 2:
+                x1, x2 = self.saved_tensors
+                return (
+                    _unbroadcast(x2 * grad_out, x1.shape),
+                    _unbroadcast(x1 * grad_out, x2.shape),
+                )
+            case _:
+                raise RuntimeError("Multiply function only supports 1 or 2 tensors.")
+
+
 class ExpOp(Function):
-    """y = e^x functor."""
+    """y = e^x operation."""
 
     def forward(self, x: Tensor) -> Tensor:
         if x.is_empty:
             return x
         dtype = promote_dtypes(x.dtype, DataType.FP32)
         x = x.to(dtype)
-        self.save_for_backward(x)
-        return Tensor._new_contiguous(x.dtype, x.shape, _C.exp(x._C_view))
+        e_x = Tensor._new_contiguous(x.dtype, x.shape, _C.exp(x._C_view))
+        self.save_for_backward(e_x)
+        return e_x
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self.saved_tensors is None:
-            raise RuntimeError("Cannot backward with no saved tensors.")
         if len(self.saved_tensors) > 1:
             raise RuntimeError("Exp function only supports 1 tensor.")
-        x: Tensor = self.saved_tensors[0]  # type: ignore
-        e_x = Tensor._new_contiguous(x.dtype, x.shape, _C.exp(x._C_view))
+        e_x: Tensor = self.saved_tensors[0]  # type: ignore
         return (grad_out * e_x,)
 
 
 class LogOp(Function):
-    """y = log(x) functor."""
+    """y = log(x) operation."""
 
     def forward(self, x: Tensor) -> Tensor:
         if x.is_empty:
@@ -89,8 +82,6 @@ class LogOp(Function):
         return Tensor._new_contiguous(dtype, x.shape, _C.log(x._C_view))
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self.saved_tensors is None:
-            raise RuntimeError("Cannot backward with no saved tensors.")
         if len(self.saved_tensors) > 1:
             raise RuntimeError("Log function only supports 1 tensor.")
         x: Tensor = self.saved_tensors[0]  # type: ignore
@@ -98,7 +89,7 @@ class LogOp(Function):
 
 
 class SumOp(Function):
-    """y = sum(x, axis=...) functor."""
+    """y = sum(x, axis=...) operation."""
 
     def forward(
         self,
@@ -114,9 +105,11 @@ class SumOp(Function):
         self._keepdim = keepdim
 
         if axis == ():
+            self._orig_shape = None
             return x.to(dtype or x.dtype)
         elif isinstance(axis, int):
             axis = (axis,)
+
         axis = tuple(ax + x.ndim if ax < 0 else ax for ax in axis)
         if any(not isinstance(ax, int) for ax in axis):
             raise TypeError(f"Invalid axis: {axis}")
@@ -136,8 +129,7 @@ class SumOp(Function):
             return Tensor._new_contiguous(
                 dtype, new_shape, _C.zeros(new_shape, dtype.cpp_dtype)
             )
-
-        self.save_for_backward(x)
+        self._orig_shape = x.shape
 
         return Tensor._new_contiguous(
             dtype=dtype,
@@ -146,18 +138,13 @@ class SumOp(Function):
         )
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self.saved_tensors is None:  # Was called with ()
-            if not hasattr(self, "_axis") or self._axis != ():
-                raise ValueError("No tensor saved.")
+        if self._orig_shape is None:
             return (grad_out,)
-        if len(self.saved_tensors) > 1:
-            raise RuntimeError("Sum function only supports 1 tensor.")
-        x: Tensor = self.saved_tensors[0]  # type: ignore
-        return (grad_out.expand(x.shape),)
+        return (grad_out.expand(self._orig_shape),)
 
 
 class TransposeOp(Function):
-    """y = log(x) functor."""
+    """y = x.T operation."""
 
     def forward(self, x: Tensor) -> Tensor:
         if len(x.shape) < 2:

@@ -15,7 +15,7 @@ class Function:
 
     def __init__(self):
         self._inputs: tuple[TensorLike, ...] | None = None
-        self._saved_tensors: tuple[TensorLike, ...] | None = None
+        self._saved_tensors: tuple[Tensor, ...] | None = None
 
     def __repr__(self) -> str:
         inner = (
@@ -33,8 +33,11 @@ class Function:
         return self._inputs
 
     @property
-    def saved_tensors(self) -> tuple[TensorLike, ...] | None:
+    def saved_tensors(self) -> tuple[Tensor, ...]:
         """Returns tensors saved during forward."""
+        if self._saved_tensors is None:
+            raise RuntimeError("No tensor was saved during forward.")
+        # FIXME: add tensor version before implementing inplace ops
         return self._saved_tensors
 
     @classmethod
@@ -47,7 +50,7 @@ class Function:
             output.attach_grad_fn(self)
         return output
 
-    def save_for_backward(self, *tensors: TensorLike) -> None:
+    def save_for_backward(self, *tensors: Tensor) -> None:
         """Registers tensors for backward op, can be queried with saved_tensors."""
         self._saved_tensors = tuple(tensors)
 
