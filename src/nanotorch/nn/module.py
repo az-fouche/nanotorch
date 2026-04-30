@@ -35,7 +35,7 @@ class Linear(Module):
     """
 
     def __init__(self, fan_in: int, fan_out: int, bias: bool = True) -> None:
-        self._W = 0.02 * (rand(fan_in, fan_out) - 0.5)
+        self._W = rand(fan_in, fan_out) - 0.5
         self._W.enable_grad()
         if bias:
             self._b = zeros(fan_out, requires_grad=True)
