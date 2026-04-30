@@ -14,7 +14,7 @@ class AddOp(Function):
     """y = x1 + x2 functor."""
 
     def forward(self, x1: Tensor, x2: TensorLike) -> Tensor:
-        if isinstance(x2, Tensor):
+        if isinstance(x2, Tensor) and x2.requires_grad:
             self.save_for_backward(x1, x2)
         else:
             self.save_for_backward(x1)
@@ -154,6 +154,25 @@ class SumOp(Function):
             raise RuntimeError("Sum function only supports 1 tensor.")
         x: Tensor = self.saved_tensors[0]  # type: ignore
         return (grad_out.expand(x.shape),)
+
+
+class TransposeOp(Function):
+    """y = log(x) functor."""
+
+    def forward(self, x: Tensor) -> Tensor:
+        if len(x.shape) < 2:
+            return x
+        strides, offset = x.strides
+        return Tensor._new_view(
+            x.dtype,
+            tuple(reversed(x.shape)),
+            x.storage,
+            tuple(reversed(strides)),
+            offset,
+        )
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        return (grad_out.T,)
 
 
 def _unbroadcast(x: Tensor, shape: TensorShape) -> Tensor:

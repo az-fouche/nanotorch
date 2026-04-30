@@ -1,7 +1,7 @@
 """Main nanotorch module initialization point."""
 
 from ._data_type import DataType, bool_, float32, float64, int32, int64
-from .autograd import AddOp, ExpOp, LogOp, MulOp, SumOp
+from .autograd import AddOp, ExpOp, LogOp, MulOp, SumOp, TransposeOp
 from .core import Tensor
 from .factories import arange, eye, full, ones, tensor, zeros
 from .ops import (

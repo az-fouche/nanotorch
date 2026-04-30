@@ -14,6 +14,7 @@ class Function:
     """
 
     def __init__(self):
+        self._inputs: tuple[TensorLike, ...] | None = None
         self._saved_tensors: tuple[TensorLike, ...] | None = None
 
     def __repr__(self) -> str:
@@ -25,6 +26,13 @@ class Function:
         return f"[{self.__class__.__name__}({inner})]"
 
     @property
+    def inputs(self) -> tuple[TensorLike, ...]:
+        """Returns function inputs."""
+        if self._inputs is None:
+            raise RuntimeError("No inputs saved during apply().")
+        return self._inputs
+
+    @property
     def saved_tensors(self) -> tuple[TensorLike, ...] | None:
         """Returns tensors saved during forward."""
         return self._saved_tensors
@@ -33,6 +41,7 @@ class Function:
     def apply(cls, *inputs: Any) -> Tensor:
         """Runs forward and creates ops/tensor bindings."""
         self = cls()
+        self._inputs = inputs
         output = self.forward(*inputs)
         if any(t.requires_grad for t in inputs if isinstance(t, Tensor)):
             output.attach_grad_fn(self)

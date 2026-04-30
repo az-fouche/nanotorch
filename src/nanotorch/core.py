@@ -57,7 +57,7 @@ class Tensor:
         dtype, shape, storage = _extract_tensor_data(data, dtype)
         self._dtype = dtype
         self._shape = shape
-        self._data = storage
+        self._storage = storage
         self._strides = _infer_strides(shape)
         self._offset = 0
 
@@ -103,7 +103,7 @@ class Tensor:
         new = cls.__new__(cls)
         new._dtype = dtype
         new._shape = shape
-        new._data = storage
+        new._storage = storage
         new._strides = strides
         new._offset = offset
         new._requires_grad = False
@@ -157,7 +157,7 @@ class Tensor:
             return Tensor._new_view(
                 dtype=self.dtype,
                 shape=view.shape,
-                storage=self._data,
+                storage=self._storage,
                 strides=view._strides,
                 offset=view._offset,
             )
@@ -199,11 +199,13 @@ class Tensor:
                 value = value.expand(view.shape)
             except ValueError as e:
                 raise IndexError(str(e)) from e
-            if value._data is self._data:  # aliasing guard
+            if value._storage is self._storage:  # aliasing guard
                 value = value._to_contiguous()
             _C.copy_view(
                 src=value._C_view,
-                dst=_C.TensorView(self._data, view.shape, view._strides, view._offset),
+                dst=_C.TensorView(
+                    self._storage, view.shape, view._strides, view._offset
+                ),
             )
             return
 
@@ -212,7 +214,7 @@ class Tensor:
             value = value.expand(fax.new_shape)
         except ValueError as e:
             raise IndexError(str(e)) from e
-        if value._data is self._data:  # aliasing guard
+        if value._storage is self._storage:  # aliasing guard
             value = value._to_contiguous()
 
         _C.scatter_to_axes(
@@ -250,17 +252,22 @@ class Tensor:
         return self.numel == 0
 
     @property
+    def storage(self) -> _C.Storage:
+        """Returns the 1D C++ storage buffer."""
+        return self._storage
+
+    @property
+    def strides(self) -> tuple[TensorShape, int]:
+        """Returns (strides, offset)."""
+        return self._strides, self._offset
+
+    @property
     def T(self) -> Tensor:
         """Returns a transposed view (no copy)."""
-        if len(self.shape) < 2:
-            return self
-        return Tensor._new_view(
-            self.dtype,
-            tuple(reversed(self.shape)),
-            self._data,
-            tuple(reversed(self._strides)),
-            self._offset,
-        )
+        # workaround for runtime binding of @property
+        from .autograd import TransposeOp
+
+        return TransposeOp.apply(self)
 
     def to(self, target: DataType) -> Tensor:
         """Cast the tensor to a new DataType, leaves inplace if no cast needed.
@@ -275,7 +282,7 @@ class Tensor:
         this = self
         if not this._is_contiguous(full_span=True):
             this = this._to_contiguous(force=True)
-        new_buffer = _C.cast(this._data, target.cpp_dtype)
+        new_buffer = _C.cast(this._storage, target.cpp_dtype)
         return Tensor._new_view(
             target, this.shape, new_buffer, this._strides, this._offset
         )
@@ -289,7 +296,7 @@ class Tensor:
             Tensor to copy.
         """
         if self._is_contiguous(full_span=True):
-            return Tensor._new_contiguous(self.dtype, self.shape, self._data.clone())
+            return Tensor._new_contiguous(self.dtype, self.shape, self._storage.clone())
         return self._to_contiguous(force=True)
 
     def reshape(self, *dims: int) -> Tensor:
@@ -316,7 +323,7 @@ class Tensor:
             return self
         this = self._to_contiguous()
         return Tensor._new_view(
-            this.dtype, tuple(dims), this._data, strides=None, offset=this._offset
+            this.dtype, tuple(dims), this._storage, strides=None, offset=this._offset
         )
 
     def transpose(self, dim0: int, dim1: int) -> Tensor:
@@ -349,7 +356,7 @@ class Tensor:
         return Tensor._new_view(
             self.dtype,
             tuple(shape),
-            self._data,
+            self._storage,
             tuple(strides),
             self._offset,
         )
@@ -381,7 +388,7 @@ class Tensor:
                         f"Cannot broadcast {self.shape} to {shape} (mismatch)."
                     )
         return Tensor._new_view(
-            self.dtype, shape, self._data, tuple(strides), self._offset
+            self.dtype, shape, self._storage, tuple(strides), self._offset
         )
 
     def flatten(self) -> Tensor:
@@ -429,7 +436,7 @@ class Tensor:
 
     def tolist(self) -> InputType:
         """Converts the tensor to a scalar or list, preserving shape and type."""
-        storage = memoryview(self._data)
+        storage = memoryview(self._storage)
 
         def rec(
             shape: TensorShape, strides: TensorShape, offset: int, depth: int
@@ -449,7 +456,7 @@ class Tensor:
         """Extracts a single element tensor to a python scalar (!!expensive!!)."""
         if self.numel != 1:
             raise RuntimeError(f"Cannot convert {self} to a scalar.")
-        storage = memoryview(self._data)
+        storage = memoryview(self._storage)
         return storage[self._offset]
 
     # Tensor ops -- bound in nanotorch.__init__
@@ -771,7 +778,7 @@ class Tensor:
         return (
             self._strides == _infer_strides(self._shape)
             and self._offset == 0
-            and self.numel == len(memoryview(self._data))
+            and self.numel == len(memoryview(self._storage))
         )
 
     def _to_contiguous(self, force: bool = False) -> Tensor:
@@ -783,7 +790,7 @@ class Tensor:
     @property
     def _C_view(self) -> _C.TensorView:
         """Return a C++-compatible tensor view."""
-        return _C.TensorView(self._data, self.shape, self._strides, self._offset)
+        return _C.TensorView(self._storage, self.shape, self._strides, self._offset)
 
 
 def inherit_doc(source):
@@ -968,7 +975,7 @@ class _FancyAxes:
             # TODO: do it index-based once implemented
             if not fancy_index._is_contiguous(full_span=True):
                 fancy_index = fancy_index._to_contiguous(force=True)
-            content = memoryview(fancy_index._data)
+            content = memoryview(fancy_index._storage)
             for i in range(len(content)):
                 if content[i] < 0:
                     content[i] = content[i] + shape[dim]
@@ -1086,7 +1093,7 @@ def _newview_indexing(
             newdim += 1
 
     return Tensor._new_view(
-        x.dtype, tuple(new_shape), x._data, tuple(new_strides), offset
+        x.dtype, tuple(new_shape), x._storage, tuple(new_strides), offset
     ), tuple(new_index)
 
 
@@ -1101,12 +1108,13 @@ def _backpropagate_grad(seed: Tensor) -> None:
     while to_visit:
         f_x = to_visit.pop(0)
         grad_fn = f_x.grad_fn
-        if grad_fn is None or grad_fn.saved_tensors is None:
+        if grad_fn is None:
             continue
         inputs = []
-        for x in grad_fn.saved_tensors:
+        for x in grad_fn.inputs:
             if isinstance(x, Tensor):
-                to_visit.append(x)
+                if x.requires_grad:
+                    to_visit.append(x)
                 inputs.append(x)
         sorted_nodes.append((f_x, grad_fn, tuple(inputs)))
 
@@ -1119,6 +1127,8 @@ def _backpropagate_grad(seed: Tensor) -> None:
             raise RuntimeError("f_x.grad is None.")
         grads = grad_fn.backward(f_x.grad)
         for x, grad in zip(inputs, grads):
+            if not x.requires_grad:
+                continue
             if x._grad is None:
                 x._grad = grad
                 if not x.is_leaf:

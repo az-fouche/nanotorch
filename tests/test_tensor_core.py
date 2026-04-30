@@ -255,7 +255,7 @@ def test_getitem_slice_1d_aliasing():
     x = nt.tensor([1, 3, 4, 5, 6, 9])
     y = x[1:3]
     assert y.tolist() == [3, 4]
-    data = memoryview(x._data)
+    data = memoryview(x.storage)
     data[1] = 12
     assert y.tolist() == [12, 4]
 

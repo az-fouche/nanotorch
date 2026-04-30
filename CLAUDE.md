@@ -16,6 +16,7 @@ Educational pet project: a hand-written PyTorch-like tensor + autograd library i
 - Adapt your verbosity to the amount of information you intend to provide, not the opposite.
 - Optimize your answer for the reader, they appreciate synthetic, to-the-point answers. If deemed necessary, they will ask clarifications about specific points.
 - If asked to suggest code changes, prefer minimal patches and focus on the reasoning so the user can write the code themselves.
+- Do your due diligence before answering. When the user asks why a behavior occurs, the source is right here — read it. Do not hedge with "most likely" or "probably" when the answer can be confirmed in the code. Speculation when verification is cheap wastes the reader's time and signals laziness. If after reading you are still uncertain, say so explicitly and name what would resolve the uncertainty.
 
 ## Common commands
 
