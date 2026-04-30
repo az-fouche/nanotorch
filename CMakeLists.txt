@@ -22,6 +22,9 @@ pybind11_add_module(_C MODULE
     src/cpp/storage.cpp
     src/cpp/ops.cpp
 )
-target_compile_options(_C PRIVATE /W4)
+target_compile_options(_C PRIVATE 
+    $<$<CXX_COMPILER_ID:MSVC>:/W4>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+)
 
 install(TARGETS _C DESTINATION nanotorch)

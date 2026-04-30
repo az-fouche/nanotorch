@@ -12,7 +12,7 @@
 #if defined(_MSC_VER) && !defined(__clang__)
     #define NT_UNREACHABLE() __assume(false)
 #elif defined(__GNUC__) || defined(__clang__)
-    #define NT_UNREACHABLE() __builtin__unreachable()
+    #define NT_UNREACHABLE() __builtin_unreachable()
 #else
     #define NT_UNREACHABLE() std::abort()
 #endif
