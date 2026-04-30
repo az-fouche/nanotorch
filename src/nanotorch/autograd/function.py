@@ -37,7 +37,7 @@ class Function:
         """Returns tensors saved during forward."""
         if self._saved_tensors is None:
             raise RuntimeError("No tensor was saved during forward.")
-        # FIXME: add tensor version before implementing inplace ops
+        # FIXME: add Storage version before implementing inplace ops
         return self._saved_tensors
 
     @classmethod
