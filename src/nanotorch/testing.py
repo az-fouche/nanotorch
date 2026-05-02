@@ -16,13 +16,28 @@ def assert_allclose(x1: nt.Tensor, x2: nt.Tensor, tol: float = 1e-6) -> None:
             raise AssertionError(f"Tensors {x1} and {x2} do not match ({i} != {j}).")
 
 
-def gradcheck(op: Function, *inputs: nt.Tensor, eps: float = 1e-6, tol: float = 1e-5):
+def gradcheck(
+    op: type[Function], *inputs: nt.Tensor, eps: float = 1e-6, rtol: float = 1e-5
+):
     """Performs gradient correctness checking for testing."""
     out = op.apply(*inputs)
     loss = out.sum()
     loss.backward()
-    grad_anal = [x.grad for x in inputs]
 
     for x in inputs:
+        if x.grad is None:
+            continue
+        grad_flat = x.grad.flatten()
+        x_flat = x.flatten()
         for i in range(x.numel):
-            pass
+            xi_orig = x_flat[i].item()
+            x_flat[i] += eps
+            lossp = op.apply(*inputs).sum().item()
+            x_flat[i] -= 2 * eps
+            lossm = op.apply(*inputs).sum().item()
+            x_flat[i] = xi_orig
+            g_anal = grad_flat[i].item()
+            g_nume = (lossp - lossm) / (2 * eps)
+            # negation catches nan
+            if not (abs(g_anal - g_nume) <= rtol * max(1, abs(g_anal))):
+                raise AssertionError(f"Grad check mismatch ({g_anal} != {g_nume})")

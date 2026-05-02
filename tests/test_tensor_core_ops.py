@@ -383,17 +383,23 @@ def test_tensor_equals_2d_intindex_slice():
 
 def test_tensor_transpose_empty():
     x = nt.tensor([])
-    assert x.T is x
+    assert x.T.dtype == x.dtype
+    assert x.T.shape == x.shape
+    assert x.T.tolist() == x.tolist()
 
 
 def test_tensor_transpose_0d():
     x = nt.tensor(0.0)
-    assert x.T is x
+    assert x.T.dtype == x.dtype
+    assert x.T.shape == x.shape
+    assert x.T.tolist() == x.tolist()
 
 
 def test_tensor_transpose_1d():
     x = nt.tensor([0.0, 1.0, 2.0, 3.0])
-    assert x.T is x
+    assert x.T.dtype == x.dtype
+    assert x.T.shape == x.shape
+    assert x.T.tolist() == x.tolist()
 
 
 def test_tensor_transpose_2d():

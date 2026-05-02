@@ -574,6 +574,10 @@ class Tensor:
         """Return a C++-compatible tensor view."""
         return _C.TensorView(self._storage, self.shape, self._strides, self._offset)
 
+    def _alias(self) -> Tensor:
+        """Returns a new Tensor wrapper (no copy)."""
+        return Tensor._new_view(self.dtype, self.shape, self.storage, *self.strides)
+
 
 # Private functions
 

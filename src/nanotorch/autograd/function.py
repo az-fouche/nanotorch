@@ -48,6 +48,8 @@ class Function:
         self._inputs = args
         self._inputs_kw = kwargs
         output = self.forward(*args, **kwargs)
+        if any(output is arg for arg in list(args) + list(kwargs.values())):
+            output = output._alias()  # keeps DAG structure
         if any(t.requires_grad for t in args if isinstance(t, Tensor)):
             output.attach_grad_fn(self)
         return output
