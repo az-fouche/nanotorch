@@ -1,5 +1,6 @@
 """Tensor operations as non-member functions."""
 
+from . import autograd
 from .core import DataType, Tensor, TensorShape, inherit_doc
 
 
@@ -30,32 +31,37 @@ def equals(x: Tensor, y: Tensor) -> bool:
     return x.equals(y)
 
 
-@inherit_doc(Tensor.__add__)
+@inherit_doc(autograd.AddOp)
 def add(x: Tensor, y: Tensor) -> Tensor:
     return x + y
 
 
-@inherit_doc(Tensor.__sub__)
+@inherit_doc(autograd.SubOp)
 def subtract(x: Tensor, y: Tensor) -> Tensor:
     return x - y
 
 
-@inherit_doc(Tensor.__mul__)
+@inherit_doc(autograd.MulOp)
 def multiply(x: Tensor, y: Tensor) -> Tensor:
     return x * y
 
 
-@inherit_doc(Tensor.__truediv__)
+@inherit_doc(autograd.TrueDivOp)
 def divide(x: Tensor, y: Tensor) -> Tensor:
     return x / y
 
 
-@inherit_doc(Tensor.__matmul__)
+@inherit_doc(autograd.NegOp)
+def negate(x: Tensor) -> Tensor:
+    return -x
+
+
+@inherit_doc(autograd.MatmulOp)
 def matmul(x: Tensor, y: Tensor) -> Tensor:
     return x @ y
 
 
-@inherit_doc(Tensor.sum)
+@inherit_doc(autograd.SumOp)
 def sum(
     x: Tensor,
     axis: int | TensorShape | None = None,
@@ -66,7 +72,7 @@ def sum(
     return x.sum(axis, keepdim, dtype=dtype)
 
 
-@inherit_doc(Tensor.mean)
+@inherit_doc(autograd.MeanOp)
 def mean(
     x: Tensor,
     axis: int | TensorShape | None = None,
@@ -77,16 +83,16 @@ def mean(
     return x.mean(axis, keepdim, dtype=dtype)
 
 
-@inherit_doc(Tensor.exp)
+@inherit_doc(autograd.ExpOp)
 def exp(x: Tensor) -> Tensor:
     return x.exp()
 
 
-@inherit_doc(Tensor.log)
+@inherit_doc(autograd.LogOp)
 def log(x: Tensor) -> Tensor:
     return x.log()
 
 
-@inherit_doc(Tensor.pow)
+@inherit_doc(autograd.PowOp)
 def pow(x: Tensor, exponent: Tensor | float | int | bool) -> Tensor:
     return x.pow(exponent)

@@ -46,4 +46,4 @@ class GradientDescent(Optimizer):
             if p.requires_grad:
                 if p.grad is None:
                     raise RuntimeError("Gradients not set, did you call backward?")
-                p.sub_(p.grad * self._lr)
+                p -= p.grad * self._lr

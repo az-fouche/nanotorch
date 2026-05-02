@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from nanotorch.core import Tensor, TensorLike
+from nanotorch.core import Tensor
 
 
 class Function:
@@ -14,7 +14,8 @@ class Function:
     """
 
     def __init__(self):
-        self._inputs: tuple[TensorLike, ...] | None = None
+        self._inputs: Any = None
+        self._inputs_kw: Any = None
         self._saved_tensors: tuple[Tensor, ...] | None = None
 
     def __repr__(self) -> str:
@@ -26,7 +27,7 @@ class Function:
         return f"[{self.__class__.__name__}({inner})]"
 
     @property
-    def inputs(self) -> tuple[TensorLike, ...]:
+    def inputs(self) -> tuple[Tensor, ...]:
         """Returns function inputs."""
         if self._inputs is None:
             raise RuntimeError("No inputs saved during apply().")
@@ -41,12 +42,13 @@ class Function:
         return self._saved_tensors
 
     @classmethod
-    def apply(cls, *inputs: Any) -> Tensor:
+    def apply(cls, *args: Any, **kwargs: Any) -> Tensor:
         """Runs forward and creates ops/tensor bindings."""
         self = cls()
-        self._inputs = inputs
-        output = self.forward(*inputs)
-        if any(t.requires_grad for t in inputs if isinstance(t, Tensor)):
+        self._inputs = args
+        self._inputs_kw = kwargs
+        output = self.forward(*args, **kwargs)
+        if any(t.requires_grad for t in args if isinstance(t, Tensor)):
             output.attach_grad_fn(self)
         return output
 

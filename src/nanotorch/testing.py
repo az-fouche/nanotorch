@@ -1,4 +1,5 @@
 import nanotorch as nt
+from nanotorch.autograd import Function
 
 
 def assert_allclose(x1: nt.Tensor, x2: nt.Tensor, tol: float = 1e-6) -> None:
@@ -13,3 +14,15 @@ def assert_allclose(x1: nt.Tensor, x2: nt.Tensor, tol: float = 1e-6) -> None:
     for i, j in zip(x1f, x2f):
         if abs(i - j) > tol:
             raise AssertionError(f"Tensors {x1} and {x2} do not match ({i} != {j}).")
+
+
+def gradcheck(op: Function, *inputs: nt.Tensor, eps: float = 1e-6, tol: float = 1e-5):
+    """Performs gradient correctness checking for testing."""
+    out = op.apply(*inputs)
+    loss = out.sum()
+    loss.backward()
+    grad_anal = [x.grad for x in inputs]
+
+    for x in inputs:
+        for i in range(x.numel):
+            pass

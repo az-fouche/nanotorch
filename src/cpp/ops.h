@@ -29,10 +29,20 @@ std::shared_ptr<Storage> exp(const TensorView& x);
 std::shared_ptr<Storage> log(const TensorView& x);
 std::shared_ptr<Storage> pow(const TensorView& x, Scalar value);
 std::shared_ptr<Storage> relu(const TensorView& x);
+std::shared_ptr<Storage> neg(const TensorView& x);
+bool equals(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> pw_greater(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> pw_greater_eq(const TensorView& x1, const TensorView& x2);
+std::shared_ptr<Storage> pw_equal(const TensorView& x1, const TensorView& x2);
+
+// Inplace
+void add_inplace(TensorView& out, const TensorView& other);
+void sub_inplace(TensorView& out, const TensorView& other);
+void mul_inplace(TensorView& out, const TensorView& other);
+void div_inplace(TensorView& out, const TensorView& other);
+void copy_inplace(TensorView& out, const TensorView& other);
 
 // Special
-bool equals(const TensorView& x1, const TensorView& x2);
-std::shared_ptr<Storage> greater(const TensorView& x, Scalar value);
 void copy_view(const TensorView& src, const TensorView& dst);
 void scatter_to_axes(
     const TensorView& src, 

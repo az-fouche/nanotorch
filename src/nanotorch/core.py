@@ -461,244 +461,44 @@ class Tensor:
 
     # Tensor ops -- bound in nanotorch.__init__
 
-    def __add__(self, other: TensorLike) -> Tensor:
-        """Add two tensors component-wise with broadcast.
-
-        Output tensor y is promoted and broadcast to the best suited dtype and shape
-        to prevent loss of information and ensure compatibility. Broadcasting is
-        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
-        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
-
-        Parameters
-        ----------
-        x1: Tensor
-            First term, shape S.
-        x2: Tensor
-            Second term, shape T.
-
-        Returns
-        -------
-        Tensor
-            New tensor containing the coordinate-wise addition.
-        """
-        ...
-
+    def __add__(self, other: TensorLike) -> Tensor: ...
     def __radd__(self, other: TensorLike) -> Tensor: ...
-
-    def __sub__(self, other: Tensor | float | int | bool) -> Tensor:
-        """Subtract two tensors component-wise with broadcast.
-
-        Output tensor y is promoted and broadcast to the best suited dtype and shape
-        to prevent loss of information and ensure compatibility. Broadcasting is
-        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
-        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
-
-        Parameters
-        ----------
-        x1: Tensor
-            First term, shape S.
-        x2: Tensor
-            Second term, shape T.
-
-        Returns
-        -------
-        Tensor
-            New tensor containing the coordinate-wise subtraction.
-        """
-        ...
-
-    def __rsub__(self, other: Tensor | float | int | bool) -> Tensor:
-        if not isinstance(other, Tensor):
-            other = Tensor(other)
-        return other.__sub__(self)
-
-    def __mul__(self, other: Tensor | float | int | bool) -> Tensor:
-        """Multiply two tensors component-wise with broadcast.
-
-        Output tensor y is promoted and broadcast to the best suited dtype and shape
-        to prevent loss of information and ensure compatibility. Broadcasting is
-        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
-        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
-
-        Parameters
-        ----------
-        x1: Tensor
-            First term, shape S.
-        x2: Tensor
-            Second term, shape T.
-
-        Returns
-        -------
-        Tensor
-            New tensor containing the coordinate-wise multiplication.
-        """
-        ...
-
-    def __rmul__(self, other: Tensor | float | int | bool) -> Tensor: ...
-
-    def __truediv__(self, other: Tensor | float | int | bool) -> Tensor:
-        """Floating point division with broadcast.
-
-        Output tensor y is promoted and broadcast to the best suited dtype and shape
-        to prevent loss of information and ensure compatibility. Broadcasting is
-        right-aligned, (a, b, c, d) :: (c, d) is broadcast to (a, b, c, d), and
-        (a, b, 1, d) :: (c, d) is broadcast to (a, b, c, d).
-
-        Note: 1 / tensor(0.0) => tensor(inf) -- no error raised
-
-        Parameters
-        ----------
-        x1: Tensor
-            First term, shape S.
-        x2: Tensor
-            Second term, shape T.
-
-        Returns
-        -------
-        Tensor
-            New tensor containing the coordinate-wise division.
-        """
-        return _binary_kernel_op(self, other, _C.divide)
-
-    def __rtruediv__(self, other: Tensor | float | int | bool) -> Tensor:
-        if not isinstance(other, Tensor):
-            other = Tensor(other)
-        return other.__truediv__(self)
-
-    def __neg__(self) -> Tensor:
-        """Invert the sign of all the elements of a tensor."""
-        return self.__mul__(-1)
-
-    def __matmul__(self, other: Tensor) -> Tensor:
-        """Standard 2D matrix multiplication (nD not supported yet).
-
-        Parameters
-        ----------
-        x1: Tensor
-            First term, shape (a, b)
-        x2: Tensor
-            Second term, shape (b, c)
-
-        Returns
-        -------
-        Tensor
-            New tensor of shape (a, c) containing x1 @ x2.
-        """
-        ...
-
-    def __rmatmul__(self, other: Tensor) -> Tensor:
-        return other.__matmul__(self)
-
+    def __iadd__(self, other: TensorLike) -> Tensor: ...
+    def __sub__(self, other: TensorLike) -> Tensor: ...
+    def __rsub__(self, other: TensorLike) -> Tensor: ...
+    def __isub__(self, other: TensorLike) -> Tensor: ...
+    def __mul__(self, other: TensorLike) -> Tensor: ...
+    def __rmul__(self, other: TensorLike) -> Tensor: ...
+    def __imul__(self, other: TensorLike) -> Tensor: ...
+    def __truediv__(self, other: TensorLike) -> Tensor: ...
+    def __rtruediv__(self, other: TensorLike) -> Tensor: ...
+    def __itruediv__(self, other: TensorLike) -> Tensor: ...
+    def __neg__(self) -> Tensor: ...
+    def __matmul__(self, other: Tensor) -> Tensor: ...
+    def __pow__(self, exponent: TensorLike) -> Tensor: ...
+    def __rpow__(self, exponent: TensorLike) -> Tensor: ...
+    def __eq__(self, other: TensorLike) -> Tensor: ...
+    def __gt__(self, other: TensorLike) -> Tensor: ...
+    def __ge__(self, other: TensorLike) -> Tensor: ...
+    def __lt__(self, other: TensorLike) -> Tensor: ...
+    def __le__(self, other: TensorLike) -> Tensor: ...
+    def exp(self) -> Tensor: ...
+    def log(self) -> Tensor: ...
+    def pow(self, exponent: TensorLike) -> Tensor: ...
     def sum(
         self,
         axis: int | TensorShape | None = None,
         keepdim: bool = False,
         *,
         dtype: DataType | None = None,
-    ) -> Tensor:
-        """Sum the tensor elements along one or more axes.
-
-        Parameters
-        ----------
-        x: Tensor
-            Target tensor.
-        axis: int | tuple[int, ...] | None
-            Axes index to sum along, integer is interpreted as (n,), None as all axes.
-            Dimensions of these axes are collapsed by the operation.
-        keepdim: bool
-            Instead of collapsing target axes, keeps the axis with shape[i] = 1.
-        dtype: DataType | None
-            Casts the resulting sum to this data type.
-
-        Returns
-        -------
-        Tensor
-            New tensor of containing the summed coefficients.
-        """
-        ...
-
+    ) -> Tensor: ...
     def mean(
         self,
         axis: int | TensorShape | None = None,
         keepdim: bool = False,
         *,
         dtype: DataType | None = None,
-    ) -> Tensor:
-        """Averages the tensor elements along one or more axes.
-
-        Parameters
-        ----------
-        x: Tensor
-            Target tensor.
-        axis: int | tuple[int, ...] | None
-            Axes index to average along, integer is interpreted as (n,), None as all axes.
-            Dimensions of these axes are collapsed by the operation.
-        keepdim: bool
-            Instead of collapsing target axes, keeps the axis with shape[i] = 1.
-        dtype: DataType | None
-            Casts the resulting mean to this data type.
-
-        Returns
-        -------
-        Tensor
-            New tensor of containing the averaged coefficients.
-        """
-        ...
-
-    def exp(self) -> Tensor:
-        """Exponentiate all tensor coefficients.
-
-        Parameters
-        ----------
-        x: Tensor
-            Target tensor to exponentiate.
-
-        Returns
-        -------
-        Tensor
-            Exponentiated tensor, cast to floating point if necessary.
-        """
-        ...
-
-    def log(self) -> Tensor:
-        """Logarithmize (Napierian) all tensor coefficients.
-
-        Parameters
-        ----------
-        x: Tensor
-            Target tensor to logarithmize.
-
-        Returns
-        -------
-        Tensor
-            Logarithmized tensor, cast to floating point if necessary.
-        """
-        ...
-
-    def pow(self, exponent: float | int | bool | Tensor) -> Tensor:
-        """Raises all tensor coefficients to a given exponent.
-
-        Parameters
-        ----------
-        x: Tensor
-            Target tensor.
-        exponent: Tensor | float | int | bool
-            Exponent, must be scalar-like.
-
-        Returns
-        -------
-        Tensor
-            Resulting tensor.
-        """
-        ...
-
-    def __pow__(self, other: Tensor | float | int | bool) -> Tensor:
-        return self.pow(other)
-
-    def __rpow__(self, other: Tensor | float | int | bool) -> Tensor:
-        if not isinstance(other, Tensor):
-            other = Tensor(other)
-        return other.pow(self)
+    ) -> Tensor: ...
 
     # Autograd
 
@@ -751,13 +551,6 @@ class Tensor:
         """Enables gradient tracking post-constructor."""
         self._requires_grad = True
 
-    def sub_(self, x: Tensor) -> None:
-        """Inplace subtraction, will be deprecated for inplace ops."""
-        result = self - x
-        if not result._is_contiguous(full_span=True):
-            result = result._to_contiguous(force=True)
-        self._storage = result.storage
-
     # Private operators
 
     def _is_contiguous(self, full_span: bool = False) -> bool:
@@ -780,30 +573,6 @@ class Tensor:
     def _C_view(self) -> _C.TensorView:
         """Return a C++-compatible tensor view."""
         return _C.TensorView(self._storage, self.shape, self._strides, self._offset)
-
-
-def inherit_doc(source):
-    """Copies the docstring of source into the decorated element.
-
-    Usage
-    -----
-    >>> def f1():
-    >>>     '''Some docstring'''
-    >>>     return 0
-
-    >>> @inherit_doc(f1)
-    >>> def f2():
-    >>>     return 1
-
-    >>> print(f2.__doc__)
-    >>> '''Some docstring'''
-    """
-
-    def wrap(fn):
-        fn.__doc__ = source.__doc__
-        return fn
-
-    return wrap
 
 
 # Private functions
@@ -1133,4 +902,28 @@ def _backpropagate_grad(seed: Tensor) -> None:
 TensorIndex = (
     int | slice | Sequence[bool | int | Sequence[int]] | EllipsisType | Tensor | None
 )
-TensorLike = Tensor | float | int | bool
+TensorLike = Tensor | float | int | bool | list
+
+
+def inherit_doc(source):
+    """Copies the docstring of source into the decorated element.
+
+    Usage
+    -----
+    >>> def f1():
+    >>>     '''Some docstring'''
+    >>>     return 0
+
+    >>> @inherit_doc(f1)
+    >>> def f2():
+    >>>     return 1
+
+    >>> print(f2.__doc__)
+    >>> '''Some docstring'''
+    """
+
+    def wrap(fn):
+        fn.__doc__ = source.__doc__
+        return fn
+
+    return wrap
