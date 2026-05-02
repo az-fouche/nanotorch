@@ -459,6 +459,17 @@ class Tensor:
         storage = memoryview(self._storage)
         return storage[self._offset]
 
+    def squeeze(self, *axes: int) -> Tensor:
+        """Squeezes the specified dimensions."""
+        if len(axes) == 0:
+            axes = tuple(range(self.ndim))
+        axes = tuple(ax if ax >= 0 else ax + self.ndim for ax in axes)
+        new_shape = []
+        for dim_i in range(self.ndim):
+            if not (dim_i in axes and self.shape[dim_i] == 1):
+                new_shape.append(self.shape[dim_i])
+        return self.reshape(*new_shape)
+
     # Tensor ops -- bound in nanotorch.__init__
 
     def __add__(self, other: TensorLike) -> Tensor: ...

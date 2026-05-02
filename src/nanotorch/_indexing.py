@@ -22,7 +22,7 @@ def broadcast_shapes(*shapes: TensorShape) -> TensorShape:
             elif s[i] == 1:
                 continue
             elif final_shape[i] != s[i]:
-                raise ValueError(f"Cannot broadcast shapes {s} and {final_shape}.")
+                raise RuntimeError(f"Cannot broadcast shapes {s} and {final_shape}.")
     return tuple(final_shape)
 
 

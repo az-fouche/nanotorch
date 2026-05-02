@@ -394,7 +394,14 @@ class TransposeOp(Function):
 
 
 class MatmulOp(Function):
-    """Standard 2D matrix multiplication (nD not supported yet).
+    """Standard matrix multiplication.
+
+    Available operations and shape broadcasting:
+    - (k,) @ (k,) -> ()
+    - (n, k) @ (k,) -> (n,)
+    - (k,) @ (k, m) -> (m,)
+    - (n, k) @ (k, m) -> (n, m)
+    - (B1, n, k) @ (B2, k, m) -> (B1::B2, n, m) -- Broadcast B1 and B2
 
     Parameters
     ----------
@@ -410,22 +417,36 @@ class MatmulOp(Function):
     """
 
     def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
-        if x1.ndim != 2 or x2.ndim != 2:
-            raise ValueError("Only 2D matmul is supported.")
-        if x1.shape[1] != x2.shape[0]:
-            raise ValueError(f"Cannot multiply {x1.shape} @ {x2.shape}.")
         self.save_for_backward(x1, x2)
-        shape = (x1.shape[0], x2.shape[1])
+        self._shape1, self._shape2, shape_out = _matmul_broadcast(x1.shape, x2.shape)
         dtype = promote_dtypes(x1.dtype, x2.dtype)
-        x1 = x1.to(dtype)
-        x2 = x2.to(dtype)
+        x1 = x1.to(dtype).expand(self._shape1)
+        if x2.ndim == 1 and self._shape2[-2:] == (x2.shape[0], 1):
+            x2 = x2.reshape(x2.shape[0], 1)  # Cannot expand to the right
+        x2 = x2.to(dtype).expand(self._shape2)
         return Tensor._new_contiguous(
-            dtype=dtype, shape=shape, storage=_C.matmul(x1._C_view, x2._C_view)
+            dtype=dtype, shape=shape_out, storage=_C.matmul(x1._C_view, x2._C_view)
         )
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         x1, x2 = self.saved_tensors
-        return (grad_out @ x2.T, x1.T @ grad_out)
+        x1_m = x1.expand(self._shape1)
+        if x2.ndim == 1 and self._shape2[-2:] == (x2.shape[0], 1):
+            x2 = x2.reshape(x2.shape[0], 1)
+        x2_m = x2.expand(self._shape2)
+        grad_out = grad_out.reshape(
+            *broadcast_shapes(self._shape1[:-2], self._shape2[:-2]),
+            self._shape1[-2],
+            self._shape2[-1],
+        )
+        return (
+            _unbroadcast(grad_out @ x2_m.transpose(-2, -1), x1.shape).reshape(
+                *x1.shape
+            ),
+            _unbroadcast(x1_m.transpose(-2, -1) @ grad_out, x2.shape).reshape(
+                *x2.shape
+            ),
+        )
 
 
 class ReluOp(Function):
@@ -515,3 +536,31 @@ def _binary_kernel_op(
     )
     _C.copy_inplace(out._C_view, result._C_view)
     return result
+
+
+def _matmul_broadcast(
+    x1: TensorShape, x2: TensorShape
+) -> tuple[TensorShape, TensorShape, TensorShape]:
+    """Carries out matrix multiplication shape broadcast."""
+    if len(x1) == 0 or len(x2) == 0:
+        raise RuntimeError("Scalar value encountered in matmul.")
+    dim_to_remove = []
+    if len(x1) == 1:
+        x1 = (1, *x1)
+        dim_to_remove.append(-2)
+    if len(x2) == 1:
+        x2 = (*x2, 1)
+        dim_to_remove.append(-1)
+    if x1[-1] != x2[-2]:
+        raise RuntimeError(f"Cannot multiply {x1} @ {x2}")
+    bshape = broadcast_shapes(x1[:-2], x2[:-2])
+    shape_out_raw = list(bshape) + [x1[-2], x2[-1]]
+    dim_to_remove = [ax if ax >= 0 else ax + len(shape_out_raw) for ax in dim_to_remove]
+    shape_out = [
+        dim_i for i, dim_i in enumerate(shape_out_raw) if i not in dim_to_remove
+    ]
+    return (
+        tuple(list(bshape) + list(x1[-2:])),
+        tuple(list(bshape) + list(x2[-2:])),
+        tuple(shape_out),
+    )

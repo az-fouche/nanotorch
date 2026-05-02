@@ -58,6 +58,10 @@ def test_gradcheck_pow_op(x: nt.Tensor, exp: nt.Tensor):
         ((nt.rand(3, 5), nt.rand(5, 6))),
         ((nt.rand(7, 2), nt.rand(2, 7))),
         ((nt.rand(5, 1), nt.rand(1, 5))),
+        ((nt.rand(3, 3, 5, 1), nt.rand(3, 1, 5))),
+        ((nt.rand(3, 4, 5, 2), nt.rand(1, 4, 2, 3))),
+        ((nt.rand(5), nt.rand(5))),
+        ((nt.rand(4, 5), nt.rand(5))),
     ],
 )
 def test_gradcheck_matmul_op(x1: nt.Tensor, x2: nt.Tensor):

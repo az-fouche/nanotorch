@@ -467,7 +467,7 @@ def test_getitem_advanced_broadcast_tensor():
 
 def test_getitem_advanced_broadcast_error():
     x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         x[[1, 2, 1], [1, 1, 0, 1]]
 
 
@@ -841,3 +841,21 @@ def test_setitem_2d_advanced_broadcast():
     x = nt.arange(12).reshape(3, 4)
     x[[0, 1], [1, 2]] = 33
     assert x.tolist() == [[0, 33, 2, 3], [4, 5, 33, 7], [8, 9, 10, 11]]
+
+
+def test_squeeze_full():
+    x = nt.rand(3, 1, 1, 4, 1, 5, 1)
+    x_sq = x.squeeze()
+    assert x_sq.shape == (3, 4, 5)
+
+
+def test_squeeze_partial():
+    x = nt.rand(3, 1, 1, 4, 1, 5, 1)
+    x_sq = x.squeeze(1, 2)
+    assert x_sq.shape == (3, 4, 1, 5, 1)
+
+
+def test_squeeze_neg():
+    x = nt.rand(3, 1, 1, 4, 1, 5, 1)
+    x_sq = x.squeeze(-1)
+    assert x_sq.shape == (3, 1, 1, 4, 1, 5)

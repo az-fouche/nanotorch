@@ -254,39 +254,63 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     auto s1 = x1.storage;
     auto s2 = x2.storage;
 
+    // Sanity checks
     if (s1->dtype() != s2->dtype())
         throw std::invalid_argument(
             "matmul: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
             +  " and " + dtype_to_format(s2->dtype()) + "."
         );
     if (x1.shape.size() != x2.shape.size())
-        throw std::invalid_argument("matmul: x1 and x2 have different sizes.");
+        throw std::invalid_argument("matmul: x1 and x2 have different ndim.");
+    if (x1.shape.size() < 2)
+        throw std::invalid_argument("matmul: kernel should be called with >=2d tensors.");
+        
+    auto ndim = x1.shape.size();
+    auto out_shape = std::vector<py::ssize_t>(ndim);
+    for (auto i = 0; i < ndim - 2; ++i) {
+        if (x1.shape[i] != x2.shape[i]) 
+            throw std::invalid_argument("Invalid broacast shapes.");
+        else out_shape[i] = x1.shape[i];
+    }
+    py::ssize_t lsize = x1.shape[ndim - 2];
+    py::ssize_t csize = x1.shape[ndim - 1];
+    py::ssize_t rsize = x2.shape[ndim - 1];
+    if (csize != x2.shape[ndim - 2])
+        throw std::invalid_argument("Invalid matmul shape.");
+    out_shape[ndim - 2] = lsize;
+    out_shape[ndim - 1] = rsize;
 
-    if (x1.shape.size() != 2) 
-        throw std::invalid_argument("matmul: only 2D tensors supported.");
-
-    py::ssize_t lsize = x1.shape[0];
-    py::ssize_t msize = x1.shape[1];
-    py::ssize_t rsize = x2.shape[1];
-    auto numel = lsize * rsize;
+    auto numel = numel_from_shape(out_shape);
     auto new_storage = Storage::allocate(numel, x1.storage->dtype());
-    std::vector<py::ssize_t> loc1(2);
-    std::vector<py::ssize_t> loc2(2);
-    std::vector<py::ssize_t> loco(2);
+    std::vector<py::ssize_t> loc(ndim);
     return dispatch_dtype(s1->dtype(), [&]<typename T>() {
         auto* ptr1 = static_cast<const T*>(s1->data());
         auto* ptr2 = static_cast<const T*>(s2->data());
-        auto* ptrout = static_cast<T*>(new_storage->data());
-        for (py::ssize_t i = 0; i < lsize; ++i) {
-            for (py::ssize_t j = 0; j < rsize; ++j) {
-                py::ssize_t idxo = i * rsize + j;
-                T acc = static_cast<T>(0.0);
-                for (int k = 0; k < msize; ++k) {
-                    py::ssize_t idx1 = x1.offset + i * x1.strides[0] + k * x1.strides[1];
-                    py::ssize_t idx2 = x2.offset + k * x2.strides[0] + j * x2.strides[1];
-                    acc += ptr1[idx1] * ptr2[idx2];
+        auto* prout = static_cast<T*>(new_storage->data());
+        for (py::ssize_t prout_idx = 0; prout_idx < numel; ++prout_idx) {
+            // B, i, j -> derive B, i, c and B, c, j
+            T acc = static_cast<T>(0.0);
+            for (int c = 0; c < csize; ++c) {
+                py::ssize_t idx1 = x1.offset 
+                                    + c * x1.strides[ndim - 1] 
+                                    + loc[ndim - 2] * x1.strides[ndim - 2];
+                py::ssize_t idx2 = x2.offset 
+                                    + c * x2.strides[ndim - 2]
+                                    + loc[ndim - 1] * x2.strides[ndim - 1];
+                for (auto dim_i = 0; dim_i < ndim - 2; ++dim_i) {
+                    idx1 += x1.strides[dim_i] * loc[dim_i];
+                    idx2 += x2.strides[dim_i] * loc[dim_i];
                 }
-                ptrout[idxo] = acc;
+                acc += ptr1[idx1] * ptr2[idx2];
+            }
+            prout[prout_idx] = acc;
+
+            py::ssize_t j = ndim - 1;
+            while (j >= 0) { 
+                loc[j] += 1;
+                if (loc[j] < out_shape[j]) break;
+                loc[j] = 0;
+                j -= 1;
             }
         }
         return new_storage;
