@@ -319,9 +319,7 @@ class SumOp(Function):
             )
         self._orig_shape = x.shape
 
-        return Tensor._new_contiguous(
-            _C.sum(x._C_view, axis, keepdim, dtype), new_shape
-        )
+        return Tensor._new_contiguous(_C.sum(x._C_view, axis, dtype), new_shape)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         if self._orig_shape is None:

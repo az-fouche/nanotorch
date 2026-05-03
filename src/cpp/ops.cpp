@@ -51,7 +51,7 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t st
 // Ops
 
 std::shared_ptr<Storage> sum(
-    const TensorView& x, const std::vector<py::ssize_t>& axis_drop, bool keepdim, Dtype dtype
+    const TensorView& x, const std::vector<py::ssize_t>& axis_drop, Dtype dtype
 ) {
     requires_cpu(x, "_C.sum");
 
@@ -582,7 +582,7 @@ void bind_ops_(py::module_& m) {
         "to", [](const Storage& s, Device d) { return s.to(d); }, 
         "Move a storage to another device.", py::arg("storage"), py::arg("device")
     );
-    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("keepdim"), py::arg("dtype"));
+    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("dtype"));
     m.def("add", &add, "Add elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("subtract", &subtract, "Subtract elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));

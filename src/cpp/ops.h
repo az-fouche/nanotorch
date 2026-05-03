@@ -15,7 +15,7 @@ std::shared_ptr<Storage> eye(py::ssize_t n, Dtype dtype, Device device);
 std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t step, Dtype dtype, Device device);
 
 // Common ops
-std::shared_ptr<Storage> sum(const TensorView& x, const std::vector<py::ssize_t>& axis, bool keepdim, Dtype dtype);
+std::shared_ptr<Storage> sum(const TensorView& x, const std::vector<py::ssize_t>& axis, Dtype dtype);
 std::shared_ptr<Storage> add(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2);
 std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2);
