@@ -64,7 +64,7 @@ std::shared_ptr<Storage> sum(
     auto shape_drop = std::vector<py::ssize_t>(n_axes);
     auto shape_keep = std::vector<py::ssize_t>(ndim_dst);
     py::ssize_t posd = 0, posk = 0;
-    for (size_t p = 0; p < ndim_src; ++p)
+    for (py::ssize_t p = 0; p < ndim_src; ++p)
         if (std::find(axis_drop.begin(), axis_drop.end(), p) != axis_drop.end())
             shape_drop[posd++] = x.shape[p];
         else {
@@ -425,7 +425,7 @@ void scatter_to_axes(
         indexers_data[q] = static_cast<const int64_t*>(fancy_dims_data[q].storage->data());
 
     auto fancy_axes = std::vector<py::ssize_t>(dst_ndim, -1);
-    for (py::ssize_t p = 0; p < fancy_dims_in_src.size(); ++p) fancy_axes[fancy_dims_in_src[p]] = p;
+    for (size_t p = 0; p < fancy_dims_in_src.size(); ++p) fancy_axes[fancy_dims_in_src[p]] = p;
 
     auto loc_src = std::vector<py::ssize_t>(src_ndim);
     auto loc_dst_basic = std::vector<py::ssize_t>(dst_ndim);
@@ -502,7 +502,7 @@ std::shared_ptr<Storage> gather_from_axes(
         indexers_data[q] = static_cast<const int64_t*>(fancy_dims_data[q].storage->data());
 
     auto fancy_axes = std::vector<py::ssize_t>(src_ndim, -1);
-    for (py::ssize_t p = 0; p < fancy_dims_in_src.size(); ++p) fancy_axes[fancy_dims_in_src[p]] = p;
+    for (size_t p = 0; p < fancy_dims_in_src.size(); ++p) fancy_axes[fancy_dims_in_src[p]] = p;
 
     auto loc_out = std::vector<py::ssize_t>(out_ndim);
     auto loc_src_basic = std::vector<py::ssize_t>(src_ndim);
