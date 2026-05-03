@@ -286,7 +286,7 @@ class Tensor:
 
         return TransposeOp.apply(self)
 
-    def to(self, target: Dtype | Device | DeviceLiteral) -> Tensor:
+    def to(self, target: Dtype | Device | str) -> Tensor:
         """Cast the tensor to a new Dtype, leaves inplace if no cast needed.
 
         Parameters

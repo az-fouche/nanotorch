@@ -1,7 +1,10 @@
 """Neural network parametrized modules."""
 
+from __future__ import annotations
+
 from typing import Any, Sequence
 
+from nanotorch._device import Device
 from nanotorch.autograd import ReluOp
 from nanotorch.core import Tensor
 from nanotorch.factories import rand, zeros
@@ -16,6 +19,10 @@ class Module:
     def parameters(self) -> Sequence[Tensor]:
         """Sequence of all module parameters."""
         return []
+
+    def to(self, device: Device | str) -> Module:
+        """Move the module to target device."""
+        return self
 
     def forward(self, *args: Any, **kwargs: Any) -> Any:
         raise NotImplementedError
@@ -46,6 +53,12 @@ class Linear(Module):
         if self._b is None:
             return [self._W]
         return [self._W, self._b]
+
+    def to(self, device: Device | str) -> Linear:
+        self._W = self._W.to(device)
+        if self._b is not None:
+            self._b = self._b.to(device)
+        return self
 
     def forward(self, x: Tensor) -> Tensor:
         if x.ndim != 2:
@@ -78,6 +91,11 @@ class Sequential(Module):
         for mod in self._modules:
             parameters.extend(mod.parameters())
         return parameters
+
+    def to(self, device: Device | str) -> Module:
+        """Move the module to target device."""
+        self._modules = [mod.to(device) for mod in self._modules]
+        return self
 
     def forward(self, *args: Any, **kwargs: Any) -> Any:
         x: None

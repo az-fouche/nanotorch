@@ -45,7 +45,6 @@ def zeros(
     return _tensor_factory(
         *shape,
         storage=_C.zeros(math.prod(shape), dtype, get_std_device(device)),
-        dtype=dtype,
         requires_grad=requires_grad,
     )
 
@@ -75,7 +74,6 @@ def ones(
     return _tensor_factory(
         *shape,
         storage=_C.ones(math.prod(shape), dtype, get_std_device(device)),
-        dtype=dtype,
         requires_grad=requires_grad,
     )
 
@@ -108,7 +106,6 @@ def full(
     return _tensor_factory(
         *shape,
         storage=_C.full(math.prod(shape), value, dtype, get_std_device(device)),
-        dtype=dtype,
         requires_grad=requires_grad,
     )
 
@@ -138,7 +135,6 @@ def eye(
     return _tensor_factory(
         *(n, n),
         storage=_C.eye(n, dtype, get_std_device(device)),
-        dtype=dtype,
         requires_grad=requires_grad,
     )
 
@@ -176,7 +172,6 @@ def arange(
     return _tensor_factory(
         n,
         storage=_C.arange(n, start, step, dtype, get_std_device(device)),
-        dtype=dtype,
         requires_grad=requires_grad,
     )
 
@@ -209,10 +204,7 @@ def rand(
 
 
 def _tensor_factory(
-    *shape: int,
-    storage: _C.Storage,
-    dtype: Dtype = dt.float32,
-    requires_grad: bool = False,
+    *shape: int, storage: _C.Storage, requires_grad: bool = False
 ) -> Tensor:
     """Generic tensor factory."""
     if isinstance(shape, int):

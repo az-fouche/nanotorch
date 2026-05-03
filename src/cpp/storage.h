@@ -9,7 +9,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "cuda.h"
+#include "cuda/cuda.h"
 
 #if defined(_MSC_VER) && !defined(__clang__)
     #define NT_UNREACHABLE() __assume(false)
@@ -76,7 +76,7 @@ inline Buffer make_buffer(size_t nbytes, Device device) {
     void* p = nullptr;
     if (device == Device::Cuda) {
         cudaMalloc(&p, nbytes);
-        cudaMemset(&p, 0, nbytes);
+        cudaMemset(p, 0, nbytes);
     }
     else {
         p = ::operator new(nbytes);

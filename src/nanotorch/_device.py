@@ -13,7 +13,7 @@ def is_cuda_available() -> bool:
     return _C.is_cuda_available()
 
 
-def get_std_device(device: Device | DeviceLiteral) -> Device:
+def get_std_device(device: Device | str) -> Device:
     """Converts any device repr to standard Device."""
     if isinstance(device, Device):
         return device

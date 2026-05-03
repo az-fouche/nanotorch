@@ -82,6 +82,8 @@ std::shared_ptr<Storage> Storage::to(Device target_device) const {
 std::shared_ptr<Storage> Storage::cast(Dtype target) const {
     if (target == dtype()) // No copy on same dtype
         return std::const_pointer_cast<Storage>(shared_from_this());
+    if (device() == Device::Cuda)
+        return to(Device::Cpu)->cast(target)->to(Device::Cuda); // FIXME
     auto new_storage = Storage::allocate(size(), target, device());
     dispatch_dtype(dtype(), [&]<typename Src>() {
         dispatch_dtype(target, [&]<typename Dst>() {

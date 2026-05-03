@@ -13,6 +13,10 @@ namespace py = pybind11;
             std::string(#expr " failed: ") + cudaGetErrorString(_e)); \
 } while(0)
 
-bool is_cuda_available();
+inline bool is_cuda_available() {
+    int count = 0;
+    cudaError_t err = cudaGetDeviceCount(&count);
+    return err == cudaSuccess && count > 0;
+}
 
 void bind_cuda_(py::module_& m);

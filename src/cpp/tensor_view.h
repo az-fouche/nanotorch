@@ -5,6 +5,8 @@
 
 #include "storage.h"
 
+constexpr int NT_MAX_DIMS = 32;
+
 struct TensorView {
     std::shared_ptr<Storage> storage;
     std::vector<py::ssize_t> shape;

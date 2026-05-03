@@ -1,13 +1,5 @@
 #include "ops.h"
 
-py::ssize_t numel_from_shape(const std::vector<py::ssize_t>& shape) {
-    auto n_axes = static_cast<py::ssize_t>(shape.size());
-    py::ssize_t numel = 1;
-    for (py::ssize_t i = 0; i < n_axes; ++i)
-        numel *= shape[i];
-    return numel;
-}
-
 // Factory
 
 std::shared_ptr<Storage> zeros(py::ssize_t n, Dtype dtype, Device device) {
@@ -61,6 +53,8 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t st
 std::shared_ptr<Storage> sum(
     const TensorView& x, const std::vector<py::ssize_t>& axis_drop, bool keepdim, Dtype dtype
 ) {
+    requires_cpu(x, "_C.sum");
+
     auto n_axes = static_cast<py::ssize_t>(axis_drop.size());
     auto ndim_src = static_cast<py::ssize_t>(x.shape.size());
     auto ndim_dst = static_cast<py::ssize_t>(ndim_src - n_axes);
@@ -125,41 +119,15 @@ std::shared_ptr<Storage> sum(
 }
 
 template <typename F>
-std::shared_ptr<Storage> _unary_op_generic(const TensorView& x, F&& func) {
-    auto n_axes = static_cast<py::ssize_t>(x.shape.size());
-    auto numel = numel_from_shape(x.shape);
-    auto result = Storage::allocate(numel, x.storage->dtype(), x.storage->device());
-    return dispatch_dtype(x.storage->dtype(), [&]<typename T>() {
-        auto* data_in = static_cast<const T*>(x.storage->data());
-        auto* data_out = static_cast<T*>(result->data());
-        std::vector<py::ssize_t> loc(n_axes);
-        for (py::ssize_t i = 0; i < numel; ++i) {
-            py::ssize_t idx = x.offset;
-            for (py::ssize_t j = 0; j < n_axes; ++j) {
-                idx += x.strides[j] * loc[j];
-            }
-            data_out[i] = func(data_in[idx]);
-
-            // Loc update
-            py::ssize_t j = n_axes - 1;
-            while (j >= 0) { 
-                loc[j] += 1;
-                if (loc[j] < x.shape[j]) break;
-                loc[j] = 0;
-                j -= 1;
-            }
-        }
-        return result;
-    });
-}
-
-template <typename F>
 std::shared_ptr<Storage> _binary_op_generic(
     const TensorView& x1, 
     const TensorView& x2, 
     F&& func, 
     std::optional<Dtype> out_dtype = std::nullopt
 ) {
+    requires_cpu(x1, "_C._binary_op_generic");
+    requires_cpu(x2, "_C._binary_op_generic");
+
     auto s1 = x1.storage;
     auto s2 = x2.storage;
     if (s1->dtype() != s2->dtype())
@@ -235,6 +203,9 @@ std::shared_ptr<Storage> pw_greater_eq(const TensorView& x1, const TensorView& x
 
 
 std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
+    requires_cpu(x1, "_C._binary_op_generic");
+    requires_cpu(x2, "_C._binary_op_generic");
+
     auto s1 = x1.storage;
     auto s2 = x2.storage;
 
@@ -301,27 +272,10 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     });
 }
 
-std::shared_ptr<Storage> exp(const TensorView& x) {
-    return _unary_op_generic(x, []<class T>(T a) { return std::exp(a); });
-}
-
-std::shared_ptr<Storage> log(const TensorView& x) {
-    return _unary_op_generic(x, []<class T>(T a) { return std::log(a); });
-}
-
-std::shared_ptr<Storage> pow(const TensorView& x, Scalar value) {
-    return _unary_op_generic(x, [value]<class T>(T a) { return std::pow(a, value.item<T>()); });
-}
-
-std::shared_ptr<Storage> neg(const TensorView& x) {
-    return _unary_op_generic(x, []<class T>(T a) { return -a; });
-}
-
-std::shared_ptr<Storage> relu(const TensorView& x) {
-    return _unary_op_generic(x, []<class T>(T a) { return a > 0 ? a : 0; });
-}
-
 bool equals(const TensorView& x1, const TensorView& x2) {
+    requires_cpu(x1, "_C.equals");
+    requires_cpu(x2, "_C.equals");
+
     auto s1 = x1.storage;
     auto s2 = x2.storage;
     if (s1->dtype() != s2->dtype())
@@ -367,6 +321,9 @@ bool equals(const TensorView& x1, const TensorView& x2) {
 
 template<typename F>
 void _inplace_apply(TensorView& out, const TensorView& other, F&& func) {
+    requires_cpu(out, "_C._inplace_apply");
+    requires_cpu(other, "_C._inplace_apply");
+
     if (out.shape != other.shape) {
         throw std::invalid_argument("_inplace_apply: Shape mismatch.");
     }
@@ -416,6 +373,9 @@ void copy_inplace(TensorView& out, const TensorView& other) {
 
 
 void copy_view(const TensorView& src, const TensorView& dst) {
+    requires_cpu(src, "_C.copy_view");
+    requires_cpu(dst, "_C.copy_view");
+
     auto src_storage = src.storage;
     auto dst_storage = dst.storage;
     auto n_axes = static_cast<py::ssize_t>(src.shape.size());
@@ -451,6 +411,9 @@ void scatter_to_axes(
     const std::vector<bool>& out_axis_is_fancy,
     const std::vector<py::ssize_t>& out_axis_target
 ) {
+    requires_cpu(src, "_C.scatter_to_axes");
+    requires_cpu(dst, "_C.scatter_to_axes");
+
     // TODO (optim): optimize with chunk memcopy
     py::ssize_t dst_ndim = dst.shape.size();
     py::ssize_t ind_ndim = fancy_dims_data.empty() ? 0 : (py::ssize_t)fancy_dims_data[0].shape.size();
@@ -525,6 +488,8 @@ std::shared_ptr<Storage> gather_from_axes(
     const std::vector<bool>& out_axis_is_fancy,
     const std::vector<py::ssize_t>& out_axis_target
 ) {
+    requires_cpu(x, "_C.gather_from_axes");
+
     // TODO (optim): optimize with chunk memcopy
     py::ssize_t src_ndim = x.shape.size();
     py::ssize_t ind_ndim = fancy_dims_data.empty() ? 0 : (py::ssize_t)fancy_dims_data[0].shape.size();
@@ -623,11 +588,6 @@ void bind_ops_(py::module_& m) {
     m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("divide", &divide, "Divide elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("matmul", &matmul, "Matrix multiplication.", py::arg("x1"), py::arg("x2"));
-    m.def("exp", [](const TensorView& x) { return exp(x); }, "Component-wise exponentiation.", py::arg("x"));
-    m.def("log", [](const TensorView& x) { return log(x); }, "Component-wise log.", py::arg("x"));
-    m.def("pow", [](const TensorView& x, Scalar a) { return pow(x, a); }, "Component-wise power.", py::arg("x"), py::arg("a"));
-    m.def("neg", &neg, "Component-wise negation.", py::arg("x"));
-    m.def("relu", &relu, "Rectified linear unit.", py::arg("x"));
     m.def("pw_greater", &pw_greater, "Per-coefficient strictly greater comparison.", py::arg("x"), py::arg("s"));
     m.def("pw_greater_eq", &pw_greater_eq, "Per-coefficient greater/equals comparison.", py::arg("x"), py::arg("s"));
     m.def("pw_equal", &pw_equal, "Per-coefficient equal comparison.", py::arg("x"), py::arg("s"));

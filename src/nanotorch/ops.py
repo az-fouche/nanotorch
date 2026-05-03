@@ -96,3 +96,8 @@ def log(x: Tensor) -> Tensor:
 @inherit_doc(autograd.PowOp)
 def pow(x: Tensor, exponent: Tensor | float | int | bool) -> Tensor:
     return x.pow(exponent)
+
+
+@inherit_doc(autograd.ReluOp)
+def relu(x: Tensor) -> Tensor:
+    return autograd.ReluOp.apply(x)

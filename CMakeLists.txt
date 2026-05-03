@@ -23,12 +23,14 @@ pybind11_add_module(_C MODULE
     src/cpp/_C.cpp 
     src/cpp/storage.cpp
     src/cpp/ops.cpp
-    src/cpp/cuda.cpp
+    src/cpp/cuda/cuda.cpp
+    src/cpp/cuda/unary_ops.cu
 )
+target_include_directories(_C PRIVATE src/cpp)
 target_link_libraries(_C PRIVATE CUDA::cudart)
 target_compile_options(_C PRIVATE 
-    $<$<CXX_COMPILER_ID:MSVC>:/W4>
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>
+    $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/W4>
+    $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-Wall -Wextra -Wpedantic>
 )
 
 install(TARGETS _C DESTINATION nanotorch)
