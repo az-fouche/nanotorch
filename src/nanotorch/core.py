@@ -9,7 +9,15 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 from nanotorch import _C
 
-from ._data_type import DataType, InputType, promote_dtypes
+from ._data_type import (
+    Dtype,
+    InputType,
+    dtype_from_type,
+    is_bool,
+    is_float,
+    is_int,
+    promote_dtypes,
+)
 from ._indexing import (
     TensorShape,
     broadcast_shapes,
@@ -35,7 +43,7 @@ class Tensor:
         Tensor coefficients, can be scalar or list-like, provided as python
         native types. Also supports any array-like structure from torch/numpy/jax/pandas.
         Only numerical data formats are supported.
-    dtype: DataType
+    dtype: Dtype
         Data type to cast the values to. If not set, the tensor will be promoted
         to the most precise data type following the DataTypes enum order.
     requires_grad: bool
@@ -46,7 +54,7 @@ class Tensor:
     def __init__(
         self,
         data: InputType,
-        dtype: DataType | None = None,
+        dtype: Dtype | None = None,
         requires_grad: bool = False,
     ):
         # Auto-detect numpy-like -- TODO: share memoryview
@@ -62,7 +70,7 @@ class Tensor:
         self._offset = 0
 
         # Autograd
-        if self.dtype <= DataType.INT64 and requires_grad:
+        if self.dtype <= Dtype.Int64 and requires_grad:
             raise RuntimeError("Cannot enable grad on a non-float tensor.")
         self._requires_grad = requires_grad
         self._grad: Tensor | None = None
@@ -70,7 +78,7 @@ class Tensor:
 
     @classmethod
     def _new_contiguous(
-        cls, dtype: DataType, shape: TensorShape, storage: _C.Storage
+        cls, dtype: Dtype, shape: TensorShape, storage: _C.Storage
     ) -> Tensor:
         """Intializes a new contiguous tensor from storage and shape."""
         return cls._new_view(dtype, shape, storage, None, None)
@@ -78,7 +86,7 @@ class Tensor:
     @classmethod
     def _new_view(
         cls,
-        dtype: DataType,
+        dtype: Dtype,
         shape: TensorShape,
         storage: _C.Storage,
         strides: TensorShape | None,
@@ -227,7 +235,7 @@ class Tensor:
         )
 
     @property
-    def dtype(self) -> DataType:
+    def dtype(self) -> Dtype:
         """Tensor internal data type."""
         return self._dtype
 
@@ -269,12 +277,12 @@ class Tensor:
 
         return TransposeOp.apply(self)
 
-    def to(self, target: DataType) -> Tensor:
-        """Cast the tensor to a new DataType, leaves inplace if no cast needed.
+    def to(self, target: Dtype) -> Tensor:
+        """Cast the tensor to a new Dtype, leaves inplace if no cast needed.
 
         Parameters
         ----------
-        target: DataType
+        target: Dtype
             Nanotorch data type to cast the tensor to.
         """
         if target == self.dtype:
@@ -282,7 +290,7 @@ class Tensor:
         this = self
         if not this._is_contiguous(full_span=True):
             this = this._to_contiguous(force=True)
-        new_buffer = _C.cast(this._storage, target.cpp_dtype)
+        new_buffer = _C.cast(this._storage, target)
         return Tensor._new_view(
             target, this.shape, new_buffer, this._strides, this._offset
         )
@@ -442,7 +450,7 @@ class Tensor:
             shape: TensorShape, strides: TensorShape, offset: int, depth: int
         ) -> InputType:
             if depth == len(shape):
-                if self.dtype.is_bool:
+                if is_bool(self.dtype):
                     return bool(storage[offset])
                 return storage[offset]
             return [
@@ -501,14 +509,14 @@ class Tensor:
         axis: int | TensorShape | None = None,
         keepdim: bool = False,
         *,
-        dtype: DataType | None = None,
+        dtype: Dtype | None = None,
     ) -> Tensor: ...
     def mean(
         self,
         axis: int | TensorShape | None = None,
         keepdim: bool = False,
         *,
-        dtype: DataType | None = None,
+        dtype: Dtype | None = None,
     ) -> Tensor: ...
 
     # Autograd
@@ -594,14 +602,14 @@ class Tensor:
 
 
 def _extract_tensor_data(
-    data: InputType, user_dtype: DataType | None = None
-) -> tuple[DataType, TensorShape, _C.Storage]:
+    data: InputType, user_dtype: Dtype | None = None
+) -> tuple[Dtype, TensorShape, _C.Storage]:
     """Automatically extract tensor information."""
 
     # Accumulators
     shape: list[int] = []
     flat: list[float | int | bool] = []
-    auto_dtype: DataType | None = None
+    auto_dtype: Dtype | None = None
     leaf_level: int | None = None
 
     def rec(data: InputType, level: int) -> None:
@@ -616,7 +624,7 @@ def _extract_tensor_data(
                 leaf_level = level
             elif level != leaf_level:
                 raise ValueError("Leaf found at non-terminal level.")
-            dtype = DataType.from_type(data)
+            dtype = dtype_from_type(data)
             if auto_dtype is None or dtype > auto_dtype:
                 auto_dtype = dtype
             flat.append(data)
@@ -636,16 +644,16 @@ def _extract_tensor_data(
     rec(data, 0)
 
     # Final type casting
-    auto_dtype = auto_dtype or DataType.FP32
+    auto_dtype = auto_dtype or Dtype.Float32
     if user_dtype is not None:
         final_dtype = user_dtype
     else:
         final_dtype = auto_dtype
 
     # Needs int cast
-    if final_dtype.is_bool:
+    if is_bool(final_dtype):
         values = list(bool(x) for x in flat)
-    elif auto_dtype.is_float and final_dtype.is_int:
+    elif is_float(auto_dtype) and is_int(final_dtype):
         values = list(int(x) for x in flat)
     else:
         values = flat
@@ -653,7 +661,7 @@ def _extract_tensor_data(
     return (
         final_dtype,
         tuple(shape),
-        _C.Storage.from_iterable(values, final_dtype.cpp_dtype),
+        _C.Storage.from_iterable(values, final_dtype),
     )
 
 
@@ -757,7 +765,7 @@ class _FancyAxes:
                         f"Invalid index {content[i]} in axis of len {shape[dim]}."
                     )
 
-            if fancy_index.dtype == DataType.BOOL:
+            if fancy_index.dtype == Dtype.Bool:
                 if fancy_index.ndim > 1:
                     raise NotImplementedError("nD boolean masks not here (yet).")
                 if len(fancy_index) != shape[dim]:
@@ -768,7 +776,7 @@ class _FancyAxes:
                 fancy_index = Tensor(indices)
 
             fancy_dims_in_src.append(dim)
-            indarrs_raw.append(fancy_index.to(DataType.INT64))
+            indarrs_raw.append(fancy_index.to(Dtype.Int64))
 
         indarr_shape = broadcast_shapes(*(t.shape for t in indarrs_raw))
         fancy_dims_data = [t.expand(indarr_shape) for t in indarrs_raw]

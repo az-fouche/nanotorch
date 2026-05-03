@@ -1,6 +1,6 @@
 """Main nanotorch module initialization point."""
 
-from ._data_type import DataType, bool_, float32, float64, int32, int64
+from ._data_type import Dtype, bool_, float32, float64, int32, int64
 from .autograd import (
     AddOp,
     ExpOp,
@@ -39,7 +39,7 @@ from .ops import (
 )
 
 __all__ = [
-    "DataType",
+    "Dtype",
     "Tensor",
     "TensorLike",
     "add",

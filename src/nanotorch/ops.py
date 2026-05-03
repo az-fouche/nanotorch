@@ -1,7 +1,7 @@
 """Tensor operations as non-member functions."""
 
 from . import autograd
-from .core import DataType, Tensor, TensorShape, inherit_doc
+from .core import Dtype, Tensor, TensorShape, inherit_doc
 
 
 # Core ops
@@ -67,7 +67,7 @@ def sum(
     axis: int | TensorShape | None = None,
     keepdim: bool = False,
     *,
-    dtype: DataType | None = None,
+    dtype: Dtype | None = None,
 ) -> Tensor:
     return x.sum(axis, keepdim, dtype=dtype)
 
@@ -78,7 +78,7 @@ def mean(
     axis: int | TensorShape | None = None,
     keepdim: bool = False,
     *,
-    dtype: DataType | None = None,
+    dtype: Dtype | None = None,
 ) -> Tensor:
     return x.mean(axis, keepdim, dtype=dtype)
 

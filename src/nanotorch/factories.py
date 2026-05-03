@@ -3,18 +3,18 @@
 from nanotorch import _C
 
 from . import _data_type as dt
-from .core import DataType, InputType, Tensor, inherit_doc
+from .core import Dtype, InputType, Tensor, inherit_doc
 
 
 @inherit_doc(Tensor)
 def tensor(
-    data: InputType, dtype: DataType | None = None, requires_grad: bool = False
+    data: InputType, dtype: Dtype | None = None, requires_grad: bool = False
 ) -> Tensor:
     return Tensor(data, dtype, requires_grad)
 
 
 def zeros(
-    *shape: int, dtype: DataType = dt.float32, requires_grad: bool = False
+    *shape: int, dtype: Dtype = dt.float32, requires_grad: bool = False
 ) -> Tensor:
     """Initialize a new tensor filled with zeros.
 
@@ -22,36 +22,36 @@ def zeros(
     ----------
     *shape: int
         Dimensions of the tensor.
-    dtype: DataType
+    dtype: Dtype
         Tensor elements data type.
     """
     if isinstance(shape, int):
         shape = (shape,)
-    x = Tensor._new_contiguous(dtype, shape, _C.zeros(shape, dtype.cpp_dtype))
+    x = Tensor._new_contiguous(dtype, shape, _C.zeros(shape, dtype))
     if requires_grad:
         x.enable_grad()
     return x
 
 
-def ones(*shape: int, dtype: DataType = dt.float32) -> Tensor:
+def ones(*shape: int, dtype: Dtype = dt.float32) -> Tensor:
     """Initialize a new tensor filled with ones.
 
     Parameters
     ----------
     *shape: int
         Dimensions of the tensor.
-    dtype: DataType
+    dtype: Dtype
         Tensor elements data type.
     """
     if isinstance(shape, int):
         shape = (shape,)
-    return Tensor._new_contiguous(dtype, shape, _C.ones(shape, dtype.cpp_dtype))
+    return Tensor._new_contiguous(dtype, shape, _C.ones(shape, dtype))
 
 
 def full(
     *shape: int,
     value: bool | int | float,
-    dtype: DataType = dt.float32,
+    dtype: Dtype = dt.float32,
 ) -> Tensor:
     """Initialize a new tensor filled with a set value.
 
@@ -61,28 +61,28 @@ def full(
         Dimensions of the tensor.
     value: bool | int | float
         Value to fill the tensor with.
-    dtype: DataType
+    dtype: Dtype
         Tensor elements data type.
     """
     if isinstance(shape, int):
         shape = (shape,)
-    return Tensor._new_contiguous(dtype, shape, _C.full(shape, value, dtype.cpp_dtype))
+    return Tensor._new_contiguous(dtype, shape, _C.full(shape, value, dtype))
 
 
-def eye(n: int, dtype: DataType = dt.float32) -> Tensor:
+def eye(n: int, dtype: Dtype = dt.float32) -> Tensor:
     """Initialize a new eye matrix of rank n.
 
     Parameters
     ----------
     n: int
         Matrix rank, output will be (n, n).
-    dtype: DataType
+    dtype: Dtype
         Tensor elements data type.
     """
-    return Tensor._new_contiguous(dtype, (n, n), _C.eye(n, dtype.cpp_dtype))
+    return Tensor._new_contiguous(dtype, (n, n), _C.eye(n, dtype))
 
 
-def arange(n: int, start: int = 0, step: int = 1, dtype: DataType = dt.int64) -> Tensor:
+def arange(n: int, start: int = 0, step: int = 1, dtype: Dtype = dt.int64) -> Tensor:
     """Initialize a new arithmetic range.
 
     If `x = arange(n, a0, r)`, `len(x) = n` and `x[i] = a0 + i * r`.
@@ -95,24 +95,20 @@ def arange(n: int, start: int = 0, step: int = 1, dtype: DataType = dt.int64) ->
         First element in the range.
     step: int
         Increment of the range.
-    dtype: DataType
+    dtype: Dtype
         Tensor elements data type.
     """
-    return Tensor._new_contiguous(
-        dtype, (n,), _C.arange(n, start, step, dtype.cpp_dtype)
-    )
+    return Tensor._new_contiguous(dtype, (n,), _C.arange(n, start, step, dtype))
 
 
-def rand(
-    *shape: int, dtype: DataType = dt.float32, requires_grad: bool = False
-) -> Tensor:
+def rand(*shape: int, dtype: Dtype = dt.float32, requires_grad: bool = False) -> Tensor:
     """Initialize a new tensor initialized with random noise.
 
     Parameters
     ----------
     *shape: int
         Dimensions of the tensor.
-    dtype: DataType
+    dtype: Dtype
         Tensor elements data type.
     requires_grad: bool
         If set to True, this tensor will receive gradients.

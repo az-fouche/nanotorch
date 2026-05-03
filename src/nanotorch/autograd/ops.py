@@ -3,7 +3,7 @@
 from typing import Callable
 
 from nanotorch import _C
-from nanotorch._data_type import DataType, promote_dtypes
+from nanotorch._data_type import Dtype, promote_dtypes
 from nanotorch._indexing import TensorShape, broadcast_shapes
 from nanotorch.core import Tensor
 
@@ -187,7 +187,7 @@ class ExpOp(Function):
     def forward(self, x: Tensor) -> Tensor:
         if x.is_empty:
             return x
-        dtype = promote_dtypes(x.dtype, DataType.FP32)
+        dtype = promote_dtypes(x.dtype, Dtype.Float32)
         x = x.to(dtype)
         e_x = Tensor._new_contiguous(x.dtype, x.shape, _C.exp(x._C_view))
         self.save_for_backward(e_x)
@@ -214,7 +214,7 @@ class LogOp(Function):
     def forward(self, x: Tensor) -> Tensor:
         if x.is_empty:
             return x
-        dtype = promote_dtypes(x.dtype, DataType.FP32)
+        dtype = promote_dtypes(x.dtype, Dtype.Float32)
         x = x.to(dtype)
         self.save_for_backward(x)
         return Tensor._new_contiguous(dtype, x.shape, _C.log(x._C_view))
@@ -246,7 +246,7 @@ class PowOp(Function):
             exponent = Tensor(exponent)
         dtype = promote_dtypes(x.dtype, exponent.dtype)
         exponent_fp = float(exponent.item())
-        if exponent_fp < 0 and dtype <= DataType.INT64:
+        if exponent_fp < 0 and dtype <= Dtype.Int64:
             raise RuntimeError("Cannot use negative exponent with integer tensor.")
         self.save_for_backward(x, exponent)
         return Tensor._new_contiguous(
@@ -270,7 +270,7 @@ class SumOp(Function):
         Dimensions of these axes are collapsed by the operation.
     keepdim: bool
         Instead of collapsing target axes, keeps the axis with shape[i] = 1.
-    dtype: DataType | None
+    dtype: Dtype | None
         Casts the resulting sum to this data type.
 
     Returns
@@ -284,7 +284,7 @@ class SumOp(Function):
         x: Tensor,
         axis: int | TensorShape | None = None,
         keepdim: bool = False,
-        dtype: DataType | None = None,
+        dtype: Dtype | None = None,
     ) -> Tensor:
         if axis is None:
             axis = tuple(range(x.ndim))
@@ -311,18 +311,16 @@ class SumOp(Function):
             new_shape = tuple(s for i, s in enumerate(x.shape) if i not in axis)
 
         if dtype is None:
-            dtype = max(x.dtype, DataType.INT64)
+            dtype = max(x.dtype, Dtype.Int64)
 
         if x.is_empty:
-            return Tensor._new_contiguous(
-                dtype, new_shape, _C.zeros(new_shape, dtype.cpp_dtype)
-            )
+            return Tensor._new_contiguous(dtype, new_shape, _C.zeros(new_shape, dtype))
         self._orig_shape = x.shape
 
         return Tensor._new_contiguous(
             dtype=dtype,
             shape=new_shape,
-            storage=_C.sum(x._C_view, axis, keepdim, dtype.cpp_dtype),
+            storage=_C.sum(x._C_view, axis, keepdim, dtype),
         )
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
@@ -343,7 +341,7 @@ class MeanOp(Function):
         Dimensions of these axes are collapsed by the operation.
     keepdim: bool
         Instead of collapsing target axes, keeps the axis with shape[i] = 1.
-    dtype: DataType | None
+    dtype: Dtype | None
         Casts the resulting mean to this data type.
 
     Returns
@@ -357,11 +355,11 @@ class MeanOp(Function):
         x: Tensor,
         axis: int | TensorShape | None = None,
         keepdim: bool = False,
-        dtype: DataType | None = None,
+        dtype: Dtype | None = None,
     ):
         if dtype is None:
             dtype = x.dtype
-        if dtype < DataType.FP32:
+        if dtype < Dtype.Float32:
             raise TypeError("Cannot take mean of integer tensor, cast to fp.")
         sum_ = x.sum(axis=axis, keepdim=keepdim, dtype=dtype)
         self._orig_shape = x.shape
@@ -468,7 +466,7 @@ def equal_op(x1: Tensor, x2: Tensor) -> Tensor:
     x1 = x1.to(dtype).expand(shape)
     x2 = x2.to(dtype).expand(shape)
     return Tensor._new_contiguous(
-        DataType.BOOL, x1.shape, _C.pw_equal(x1._C_view, x2._C_view)
+        Dtype.Bool, x1.shape, _C.pw_equal(x1._C_view, x2._C_view)
     )
 
 
@@ -478,7 +476,7 @@ def greater_op(x1: Tensor, x2: Tensor) -> Tensor:
     x1 = x1.to(dtype).expand(shape)
     x2 = x2.to(dtype).expand(shape)
     return Tensor._new_contiguous(
-        DataType.BOOL, x1.shape, _C.pw_greater(x1._C_view, x2._C_view)
+        Dtype.Bool, x1.shape, _C.pw_greater(x1._C_view, x2._C_view)
     )
 
 
@@ -488,7 +486,7 @@ def greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
     x1 = x1.to(dtype).expand(shape)
     x2 = x2.to(dtype).expand(shape)
     return Tensor._new_contiguous(
-        DataType.BOOL, x1.shape, _C.pw_greater_eq(x1._C_view, x2._C_view)
+        Dtype.Bool, x1.shape, _C.pw_greater_eq(x1._C_view, x2._C_view)
     )
 
 
