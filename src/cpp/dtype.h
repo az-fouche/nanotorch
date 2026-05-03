@@ -57,6 +57,22 @@ struct DispatchFloat {
     }
 };
 
+template <typename F>
+auto dispatch_dtype_arithmetic(Dtype dtype, F&& func) {
+    switch (dtype) {
+        case Dtype::Int32: return func.template operator()<int32_t>();
+        case Dtype::Int64: return func.template operator()<int64_t>();
+        case Dtype::Float32: return func.template operator()<float>();
+        case Dtype::Float64: return func.template operator()<double>();
+        default: throw std::invalid_argument("Invalid dtype.");
+    }
+}
+struct DispatchArithmetic {
+    template <class F> static auto run(Dtype dt, F&& f) { 
+        return dispatch_dtype_arithmetic(dt, std::forward<F>(f)); 
+    }
+};
+
 inline std::string dtype_to_format(Dtype dtype) {
     switch (dtype) {
         case Dtype::Bool: return std::string(FORMAT_BOOL);

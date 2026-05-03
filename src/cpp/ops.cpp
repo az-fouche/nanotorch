@@ -78,7 +78,7 @@ std::shared_ptr<Storage> sum(
     auto dst_storage = Storage::allocate(numel_keep, dtype, Device::Cpu);
 
     return dispatch_dtype(x.storage->dtype(), [&]<typename T_src>() {
-        return dispatch_dtype(dtype, [&]<typename T_dst>() {
+        return DispatchArithmetic::run(dtype, [&]<typename T_dst>() {
             auto src_data = static_cast<const T_src*>(x.storage->data());
             auto dst_data = static_cast<T_dst*>(dst_storage->data());
             std::vector<py::ssize_t> loc_dst(ndim_dst);
@@ -118,7 +118,7 @@ std::shared_ptr<Storage> sum(
     });
 }
 
-template <typename F>
+template <typename Dispatch, typename F>
 std::shared_ptr<Storage> _binary_op_generic(
     const TensorView& x1, 
     const TensorView& x2, 
@@ -145,8 +145,8 @@ std::shared_ptr<Storage> _binary_op_generic(
     auto numel = numel_from_shape(x1.shape);
     auto eff_dtype = out_dtype.value_or(s1->dtype());
     auto new_storage = Storage::allocate(numel, eff_dtype, x1.storage->device());
-    return dispatch_dtype(eff_dtype, [&]<typename O>() {
-        return dispatch_dtype(s1->dtype(), [&]<typename T>() {
+    return Dispatch::run(eff_dtype, [&]<typename O>() {
+        return Dispatch::run(s1->dtype(), [&]<typename T>() {
             auto* ptr1 = static_cast<const T*>(s1->data());
             auto* ptr2 = static_cast<const T*>(s2->data());
             auto* ptrout = static_cast<O*>(new_storage->data());
@@ -174,31 +174,31 @@ std::shared_ptr<Storage> _binary_op_generic(
 }
 
 std::shared_ptr<Storage> add(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a + b; });
+    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a + b; });
 }
 
 std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a - b; });
+    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a - b; });
 }
 
 std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a * b; });
+    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a * b; });
 }
 
 std::shared_ptr<Storage> divide(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a / b; });
+    return _binary_op_generic<DispatchArithmetic>(x1, x2, []<class T>(T a, T b) { return a / b; });
 }
 
 std::shared_ptr<Storage> pw_equal(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a == b; }, Dtype::Bool);
+    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a == b; }, Dtype::Bool);
 }
 
 std::shared_ptr<Storage> pw_greater(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a > b; }, Dtype::Bool);
+    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a > b; }, Dtype::Bool);
 }
 
 std::shared_ptr<Storage> pw_greater_eq(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic(x1, x2, []<class T>(T a, T b) { return a >= b; }, Dtype::Bool);
+    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a >= b; }, Dtype::Bool);
 }
 
 
@@ -238,7 +238,7 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     auto numel = numel_from_shape(out_shape);
     auto new_storage = Storage::allocate(numel, x1.storage->dtype(), Device::Cpu);
     std::vector<py::ssize_t> loc(ndim);
-    return dispatch_dtype(s1->dtype(), [&]<typename T>() {
+    return dispatch_dtype_arithmetic(s1->dtype(), [&]<typename T>() {
         auto* ptr1 = static_cast<const T*>(s1->data());
         auto* ptr2 = static_cast<const T*>(s2->data());
         auto* prout = static_cast<T*>(new_storage->data());
@@ -319,7 +319,7 @@ bool equals(const TensorView& x1, const TensorView& x2) {
 
 // Inplace
 
-template<typename F>
+template<typename Dispatch, typename F>
 void _inplace_apply(TensorView& out, const TensorView& other, F&& func) {
     requires_cpu(out, "_C._inplace_apply");
     requires_cpu(other, "_C._inplace_apply");
@@ -329,7 +329,7 @@ void _inplace_apply(TensorView& out, const TensorView& other, F&& func) {
     }
     auto n_axes = static_cast<py::ssize_t>(out.shape.size());
     auto numel = numel_from_shape(out.shape);
-    dispatch_dtype(out.storage->dtype(), [&]<typename T>() {
+    Dispatch::run(out.storage->dtype(), [&]<typename T>() {
         auto* data_other = static_cast<const T*>(other.storage->data());
         auto* data_out = static_cast<T*>(out.storage->data());
         std::vector<py::ssize_t> loc(n_axes);
@@ -356,19 +356,19 @@ void _inplace_apply(TensorView& out, const TensorView& other, F&& func) {
 }
 
 void add_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply(out, other, []<typename T>(T a, T b) { return a + b; });
+    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return a + b; });
 }
 void sub_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply(out, other, []<typename T>(T a, T b) { return a - b; });
+    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return a - b; });
 }
 void mul_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply(out, other, []<typename T>(T a, T b) { return a * b; });
+    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return a * b; });
 }
 void div_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply(out, other, []<typename T>(T a, T b) { return a / b; });
+    _inplace_apply<DispatchArithmetic>(out, other, []<typename T>(T a, T b) { return a / b; });
 }
 void copy_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply(out, other, []<typename T>(T a, T b) { return b; });
+    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return b; });
 }
 
 

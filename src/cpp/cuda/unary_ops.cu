@@ -116,18 +116,18 @@ struct PowOp{
 };
 std::shared_ptr<Storage> pow(const TensorView& x, Scalar value) {
     return dispatch_dtype(x.storage->dtype(), [&]<class U>() {
-        return _dispatch_unary<DispatchAll>(x, PowOp<U>{value.item<U>()});
+        return _dispatch_unary<DispatchArithmetic>(x, PowOp<U>{value.item<U>()});
     });
 }
 
 DEFINE_UNARY(Neg, -a)
 std::shared_ptr<Storage> neg(const TensorView& x) {
-    return _dispatch_unary<DispatchAll>(x, NegOp());
+    return _dispatch_unary<DispatchArithmetic>(x, NegOp());
 }
 
 DEFINE_UNARY(Relu, (a >= 0) ? a : 0)
 std::shared_ptr<Storage> relu(const TensorView& x) {
-    return _dispatch_unary<DispatchAll>(x, ReluOp());
+    return _dispatch_unary<DispatchArithmetic>(x, ReluOp());
 }
 
 void bind_unary_ops_(py::module& m) {
