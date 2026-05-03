@@ -305,6 +305,7 @@ void _inplace_apply(TensorView& out, const TensorView& other, F&& func) {
             }
         }
     });
+    out.storage->bump_version();
 }
 
 void add_inplace(TensorView& out, const TensorView& other) {

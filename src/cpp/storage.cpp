@@ -94,5 +94,6 @@ void bind_storage_(py::module_& m) {
         .def_property_readonly("itemsize", &Storage::itemsize)
         .def_property_readonly("dtype", &Storage::dtype)
         .def_property_readonly("device", &Storage::device)
+        .def_property_readonly("version", &Storage::version)
         .def_buffer([](Storage& s) { return s.buffer_info(); });
 }

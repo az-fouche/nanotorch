@@ -859,3 +859,12 @@ def test_squeeze_neg():
     x = nt.rand(3, 1, 1, 4, 1, 5, 1)
     x_sq = x.squeeze(-1)
     assert x_sq.shape == (3, 1, 1, 4, 1, 5)
+
+
+def test_tensor_version():
+    x = nt.zeros(10)
+    assert x.version == 0
+    x += 1
+    assert x.version == 1
+    x -= 2
+    assert x.version == 2

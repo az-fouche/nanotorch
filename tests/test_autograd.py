@@ -195,3 +195,12 @@ def test_backward_order_unbalanced():
     assert a.grad is None
     assert x.grad is not None
     testing.assert_allclose(x.grad, nt.tensor([5 * math.e, 5 * math.e**2]))
+
+
+def test_version_check_on_backward():
+    x = nt.tensor([1.0, 2.0], requires_grad=True)
+    y = 2 * x
+    z = 3 * y
+    y += 2
+    with pytest.raises(RuntimeError):
+        z.backward()

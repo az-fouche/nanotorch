@@ -75,11 +75,14 @@ public:
     py::ssize_t size() const { return n_; }
     py::ssize_t itemsize() const { return dtype_itemsize(dtype_); }
     Dtype dtype() const { return dtype_; }
+    uint64_t version() const { return version_; }
+    void bump_version() { version_ += 1; }
 
 private:
     Buffer buffer_;
     Dtype dtype_;
     py::ssize_t n_;
+    uint64_t version_ = 0;
 };
 
 class Scalar {

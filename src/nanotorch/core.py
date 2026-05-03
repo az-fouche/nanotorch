@@ -286,6 +286,11 @@ class Tensor:
 
         return TransposeOp.apply(self)
 
+    @property
+    def version(self) -> int:
+        """Storage version (bumped at each inplace op)."""
+        return self.storage.version
+
     def to(self, target: Dtype | Device | str) -> Tensor:
         """Cast the tensor to a new Dtype, leaves inplace if no cast needed.
 
