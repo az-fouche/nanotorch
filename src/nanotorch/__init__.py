@@ -82,7 +82,7 @@ if not sorted(__all__) == __all__:
 
 
 def manual_seed(seed: int) -> None:
-    import numpy as np  # FIXME: implement nt.rand without np
+    import numpy as np  # FIXME(#9): implement nt.rand without np
 
     np.random.seed(seed)
 

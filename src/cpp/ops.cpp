@@ -17,7 +17,7 @@ std::shared_ptr<Storage> ones(py::ssize_t n, Dtype dtype, Device device) {
 }
 
 std::shared_ptr<Storage> full(py::ssize_t n, Scalar value, Dtype dtype, Device device) {
-    auto storage = zeros(n, dtype, Device::Cpu); // TODO: Avoid device move
+    auto storage = zeros(n, dtype, Device::Cpu); // TODO(#14): Avoid device move
     dispatch_dtype(dtype, [&]<typename T>() {
         auto data = static_cast<T*>(storage->data());
         auto fill = value.item<T>();
@@ -414,7 +414,7 @@ void scatter_to_axes(
     requires_cpu(src, "_C.scatter_to_axes");
     requires_cpu(dst, "_C.scatter_to_axes");
 
-    // TODO (optim): optimize with chunk memcopy
+    // TODO(#15) (optim): optimize with chunk memcopy
     py::ssize_t dst_ndim = dst.shape.size();
     py::ssize_t ind_ndim = fancy_dims_data.empty() ? 0 : (py::ssize_t)fancy_dims_data[0].shape.size();
     py::ssize_t src_ndim = src.shape.size();
@@ -490,7 +490,7 @@ std::shared_ptr<Storage> gather_from_axes(
 ) {
     requires_cpu(x, "_C.gather_from_axes");
 
-    // TODO (optim): optimize with chunk memcopy
+    // TODO(#15) (optim): optimize with chunk memcopy
     py::ssize_t src_ndim = x.shape.size();
     py::ssize_t ind_ndim = fancy_dims_data.empty() ? 0 : (py::ssize_t)fancy_dims_data[0].shape.size();
     py::ssize_t out_ndim = new_shape.size();

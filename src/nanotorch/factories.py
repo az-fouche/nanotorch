@@ -198,7 +198,7 @@ def rand(
         Device to store the Tensor on. Operations will be automatically performed
         on device if there is an available kernel.
     """
-    from numpy.random import rand
+    from numpy.random import rand  # FIXME(#16): drop numpy dep
 
     return Tensor(rand(*shape), dtype=dtype, requires_grad=requires_grad, device=device)  # type: ignore
 

@@ -63,7 +63,7 @@ class Tensor:
         requires_grad: bool = False,
         device: Device | DeviceLiteral = Device.Cpu,
     ):
-        # Auto-detect numpy-like -- TODO: share memoryview
+        # Auto-detect numpy-like -- TODO(#12): share memoryview
         if hasattr(data, "__array__") and hasattr(data, "tolist"):
             data = data.tolist()  # type: ignore
 
@@ -755,7 +755,7 @@ class _FancyAxes:
             else:
                 raise IndexError(f"Unexpected selector type {type(fancy_index)}")
 
-            # TODO: do it index-based once implemented
+            # TODO(#13): do it index-based once implemented
             if not fancy_index._is_contiguous(full_span=True):
                 fancy_index = fancy_index._to_contiguous(force=True)
             content = memoryview(fancy_index._storage)
