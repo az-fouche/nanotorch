@@ -2,11 +2,6 @@
 
 #include "cuda.cuh"
 
-#define DEFINE_UNARY(name, expr) \
-    struct name##Op{ \
-        template <class T> __host__ __device__ T operator()(T a) const { return expr; } \
-    };
-
 template <class Op>
 std::shared_ptr<Storage> _cpu_unary_op_generic(const TensorView& x, Op op) {
     auto n_axes = static_cast<py::ssize_t>(x.shape.size());
@@ -89,12 +84,33 @@ std::shared_ptr<Storage> _dispatch_unary(const TensorView& x, Op op) {
     return {};
 }
 
-DEFINE_UNARY(Exp, std::exp(a))
+
+// CUDA only provides float, double, long double support (see #3)
+template <class T>
+__host__ __device__ inline T nt_exp(T a) {
+    if constexpr (std::is_same_v<T, float>) return std::exp(a);
+    else return static_cast<T>(std::exp(static_cast<double>(a)));
+}
+
+template <class T>
+__host__ __device__ inline T nt_log(T a) {
+    if constexpr (std::is_same_v<T, float>) return std::log(a);
+    else return static_cast<T>(std::log(static_cast<double>(a)));
+}
+
+#define DEFINE_UNARY(name, expr) \
+    struct name##Op{ \
+        template <class T> __host__ __device__ T operator()(T a) const { return expr; } \
+    };
+
+
+
+DEFINE_UNARY(Exp, nt_exp(a))
 std::shared_ptr<Storage> exp(const TensorView& x) {
     return _dispatch_unary(x, ExpOp());
 }
 
-DEFINE_UNARY(Log, std::log(a))
+DEFINE_UNARY(Log, nt_log(a))
 std::shared_ptr<Storage> log(const TensorView& x) {
     return _dispatch_unary(x, LogOp());
 }
