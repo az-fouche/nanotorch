@@ -1,38 +1,5 @@
 #include "storage.h"
 
-// Dtype
-
-std::string dtype_to_format(Dtype dtype) {
-    switch (dtype) {
-        case Dtype::Bool: return std::string(FORMAT_BOOL);
-        case Dtype::Int32: return std::string(FORMAT_INT32);
-        case Dtype::Int64: return std::string(FORMAT_INT64);
-        case Dtype::Float32: return std::string(FORMAT_FLOAT32);
-        case Dtype::Float64: return std::string(FORMAT_FLOAT64);
-        default: throw std::invalid_argument("Unknown dtype.");
-    }
-}
-
-Dtype format_to_dtype(const std::string& format) {
-    if (format == FORMAT_BOOL) return Dtype::Bool;
-    if (format == FORMAT_INT32) return Dtype::Int32;
-    if (format == FORMAT_INT64) return Dtype::Int64;
-    if (format == FORMAT_FLOAT32) return Dtype::Float32;
-    if (format == FORMAT_FLOAT64) return Dtype::Float64;
-    throw std::invalid_argument("Unparsable format type: " + format);
-}
-
-py::ssize_t dtype_itemsize(Dtype dtype) {
-    switch (dtype) {
-        case Dtype::Bool: return SIZEOF_BOOL;
-        case Dtype::Int32: return SIZEOF_INT32;
-        case Dtype::Int64: return SIZEOF_INT64;
-        case Dtype::Float32: return SIZEOF_FLOAT32;
-        case Dtype::Float64: return SIZEOF_FLOAT64;
-        default: throw std::invalid_argument("Unknown dtype.");
-    }
-}
-
 // Storage
 
 Storage::Storage(py::ssize_t n, Dtype dtype, Device device) :

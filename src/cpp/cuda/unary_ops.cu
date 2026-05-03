@@ -2,12 +2,12 @@
 
 #include "cuda.cuh"
 
-template <class Op>
+template <class Dispatch, class Op>
 std::shared_ptr<Storage> _cpu_unary_op_generic(const TensorView& x, Op op) {
     auto n_axes = static_cast<py::ssize_t>(x.shape.size());
     auto numel = numel_from_shape(x.shape);
     auto result = Storage::allocate(numel, x.storage->dtype(), x.storage->device());
-    return dispatch_dtype(x.storage->dtype(), [&]<typename T>() {
+    return Dispatch::run(x.storage->dtype(), [&]<typename T>() {
         auto* data_in = static_cast<const T*>(x.storage->data());
         auto* data_out = static_cast<T*>(result->data());
         std::vector<py::ssize_t> loc(n_axes);
@@ -51,7 +51,7 @@ __global__ void _unary_kernel(
     out[i] = op(in[idx]);
 }
 
-template <class Op>
+template <class Dispatch, class Op>
 std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView& x, Op op) {
     auto n = numel_from_shape(x.shape);
     auto out = Storage::allocate(n, x.storage->dtype(), Device::Cuda);
@@ -60,7 +60,7 @@ std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView& x, Op op) {
         view.shape[j] = x.shape[j];
         view.strides[j] = x.strides[j];
     }
-    dispatch_dtype(x.storage->dtype(), [&]<class T>() {
+    Dispatch::run(x.storage->dtype(), [&]<class T>() {
         launch_1d(
             n, 
             _unary_kernel<T, Op>,
@@ -74,28 +74,14 @@ std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView& x, Op op) {
     return out;
 }
 
-template <class Op>
+template <class Dispatch, class Op>
 std::shared_ptr<Storage> _dispatch_unary(const TensorView& x, Op op) {
     switch (x.storage->device()) {
-        case Device::Cpu: return _cpu_unary_op_generic(x, op);
-        case Device::Cuda: return _cuda_unary_op_generic(x, op);
+        case Device::Cpu: return _cpu_unary_op_generic<Dispatch>(x, op);
+        case Device::Cuda: return _cuda_unary_op_generic<Dispatch>(x, op);
         default: NT_UNREACHABLE();
     }
     return {};
-}
-
-
-// CUDA only provides float, double, long double support (see #3)
-template <class T>
-__host__ __device__ inline T nt_exp(T a) {
-    if constexpr (std::is_same_v<T, float>) return std::exp(a);
-    else return static_cast<T>(std::exp(static_cast<double>(a)));
-}
-
-template <class T>
-__host__ __device__ inline T nt_log(T a) {
-    if constexpr (std::is_same_v<T, float>) return std::log(a);
-    else return static_cast<T>(std::log(static_cast<double>(a)));
 }
 
 #define DEFINE_UNARY(name, expr) \
@@ -104,36 +90,44 @@ __host__ __device__ inline T nt_log(T a) {
     };
 
 
-
-DEFINE_UNARY(Exp, nt_exp(a))
+DEFINE_UNARY(Exp, std::exp(a))
 std::shared_ptr<Storage> exp(const TensorView& x) {
-    return _dispatch_unary(x, ExpOp());
+    return _dispatch_unary<DispatchFloat>(x, ExpOp());
 }
 
-DEFINE_UNARY(Log, nt_log(a))
+DEFINE_UNARY(Log, std::log(a))
 std::shared_ptr<Storage> log(const TensorView& x) {
-    return _dispatch_unary(x, LogOp());
+    return _dispatch_unary<DispatchFloat>(x, LogOp());
 }
 
 template <typename T>
+__host__ __device__ T int_pow(T a, T n) {
+    T r = 1;
+    while (n > 0) { if (n & 1) r *= a; a *= a; n >>= 1; }
+    return r;
+}
+template <typename T>
 struct PowOp{ 
     T value;
-    __host__ __device__ T operator()(T a) const { return std::pow(a, value); } 
+    __host__ __device__ T operator()(T a) const { 
+        if constexpr (std::is_integral_v<T>) return int_pow(a, value);
+        else return std::pow(a, value); 
+    } 
 };
 std::shared_ptr<Storage> pow(const TensorView& x, Scalar value) {
     return dispatch_dtype(x.storage->dtype(), [&]<class U>() {
-        return _dispatch_unary(x, PowOp<U>{value.item<U>()});
+        return _dispatch_unary<DispatchAll>(x, PowOp<U>{value.item<U>()});
     });
 }
 
 DEFINE_UNARY(Neg, -a)
 std::shared_ptr<Storage> neg(const TensorView& x) {
-    return _dispatch_unary(x, NegOp());
+    return _dispatch_unary<DispatchAll>(x, NegOp());
 }
 
 DEFINE_UNARY(Relu, (a >= 0) ? a : 0)
 std::shared_ptr<Storage> relu(const TensorView& x) {
-    return _dispatch_unary(x, ReluOp());
+    return _dispatch_unary<DispatchAll>(x, ReluOp());
 }
 
 void bind_unary_ops_(py::module& m) {

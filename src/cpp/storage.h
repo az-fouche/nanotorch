@@ -1,4 +1,5 @@
 #pragma once
+
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -10,6 +11,7 @@
 #include <pybind11/stl.h>
 
 #include "cuda/cuda.h"
+#include "dtype.h"
 
 #if defined(_MSC_VER) && !defined(__clang__)
     #define NT_UNREACHABLE() __assume(false)
@@ -21,46 +23,10 @@
 
 namespace py = pybind11;
 
-inline constexpr std::string_view FORMAT_BOOL = "b";
-inline constexpr std::string_view FORMAT_INT32 = "i";
-inline constexpr std::string_view FORMAT_INT64 = "q";
-inline constexpr std::string_view FORMAT_FLOAT32 = "f";
-inline constexpr std::string_view FORMAT_FLOAT64 = "d";
-
-inline constexpr py::ssize_t SIZEOF_BOOL = 1;
-inline constexpr py::ssize_t SIZEOF_INT32 = 4;
-inline constexpr py::ssize_t SIZEOF_INT64 = 8;
-inline constexpr py::ssize_t SIZEOF_FLOAT32 = 4;
-inline constexpr py::ssize_t SIZEOF_FLOAT64 = 8;
-
-enum class Dtype : uint8_t {
-    Bool,
-    Int32,
-    Int64,
-    Float32,
-    Float64
-};
-
 enum class Device : uint8_t {
     Cpu,
     Cuda
 };
-
-std::string dtype_to_format(Dtype dtype);
-Dtype format_to_dtype(const std::string& format);
-py::ssize_t dtype_itemsize(Dtype dtype);
-
-template <typename F>
-auto dispatch_dtype(Dtype dtype, F&& func) {
-    switch (dtype) {
-        case Dtype::Bool: return func.template operator()<bool>();
-        case Dtype::Int32: return func.template operator()<int32_t>();
-        case Dtype::Int64: return func.template operator()<int64_t>();
-        case Dtype::Float32: return func.template operator()<float>();
-        case Dtype::Float64: return func.template operator()<double>();
-        default: throw std::invalid_argument("Unknown dtype.");
-    }
-}
 
 // Device-agnostic memory pointer handling cleanup
 struct BufDeleter {
