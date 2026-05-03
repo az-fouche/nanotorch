@@ -1,5 +1,7 @@
 """First project objective: multi layer perceptron MVP."""
 
+import time
+
 import nanotorch as nt
 import nanotorch.nn as nn
 
@@ -24,7 +26,9 @@ def main():
         nn.Linear(HIDDEN_SIZE, 1),
     )
     optimizer = nn.GradientDescent(model.parameters(), lr=LR)
+    print("== Starting Training ==")
     for epoch in range(N_EPOCH):
+        t_start = time.time()
         for i in range(0, N_SAMPLES, BATCH_SIZE):
             xb, yb_true = X[i : i + BATCH_SIZE], y[i : i + BATCH_SIZE]
             yb_pred = model(xb)
@@ -33,8 +37,10 @@ def main():
             loss.backward()
             optimizer.step()
         optimizer._lr = max(1e-4, optimizer._lr * 0.95)
-        print(f"Epoch {epoch}, {loss=}")
+        samples_s = N_SAMPLES / (time.time() - t_start)
+        print(f"Epoch {epoch}, loss={loss.item():.3f}, {samples_s:.1f} samples/s")
 
+    print("== Training finished ==")
     for i in range(min(10, BATCH_SIZE)):
         print(f"true: {yb_true[i].item()}, pred:{yb_pred[i].item()}")
 
