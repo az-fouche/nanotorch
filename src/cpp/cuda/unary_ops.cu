@@ -84,8 +84,9 @@ std::shared_ptr<Storage> _dispatch_unary(const TensorView& x, Op op) {
     switch (x.storage->device()) {
         case Device::Cpu: return _cpu_unary_op_generic(x, op);
         case Device::Cuda: return _cuda_unary_op_generic(x, op);
+        default: NT_UNREACHABLE();
     }
-    NT_UNREACHABLE();
+    return {};
 }
 
 DEFINE_UNARY(Exp, std::exp(a))

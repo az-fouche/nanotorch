@@ -136,6 +136,7 @@ public:
             case 2: return Dtype::Float64;
             default: NT_UNREACHABLE();
         } 
+        return {};
     }
 private:
     std::variant<bool, int64_t, double> data_;
