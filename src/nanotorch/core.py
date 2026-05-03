@@ -877,6 +877,7 @@ def _backpropagate_grad(seed: Tensor) -> None:
     """Backpropagate a value through differentiable functions."""
     # Gather nodes via BFS
     to_visit = [seed]
+    ncons = {id(seed): 0}
     sorted_nodes: list[tuple[Tensor, Function, tuple[Tensor, ...]]] = []
     while to_visit:
         f_x = to_visit.pop(0)
@@ -887,31 +888,28 @@ def _backpropagate_grad(seed: Tensor) -> None:
         for x in grad_fn.inputs:
             if isinstance(x, Tensor):
                 if x.requires_grad:
+                    ncons.setdefault(id(x), 0)
+                    ncons[id(x)] += 1
                     to_visit.append(x)
                 inputs.append(x)
         sorted_nodes.append((f_x, grad_fn, tuple(inputs)))
 
     # Propagate the gradients
-    to_cleanup: list[Tensor] = []
-    if not seed.is_leaf:
-        to_cleanup.append(seed)
     for f_x, grad_fn, inputs in sorted_nodes:
         if f_x.grad is None:
             raise RuntimeError("f_x.grad is None.")
+        ncons[id(f_x)] -= 1
+        if ncons[id(f_x)] > 0:
+            continue
         grads = grad_fn.backward(f_x.grad)
         for x, grad in zip(inputs, grads):
             if not x.requires_grad:
                 continue
             if x._grad is None:
                 x._grad = grad
-                if not x.is_leaf:
-                    to_cleanup.append(x)
             else:
                 x._grad += grad
-
-    # Cleanup TODO: find a more efficient way to cleanup inline
-    for x in to_cleanup:
-        x._grad = None
+        f_x._grad = None
 
 
 TensorIndex = (

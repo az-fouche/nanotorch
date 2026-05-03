@@ -162,7 +162,7 @@ class NegOp(Function):
         New tensor containing the coordinate-wise division.
     """
 
-    def forward(self, x1: Tensor, out: Tensor | None = None) -> Tensor:
+    def forward(self, x1: Tensor) -> Tensor:
         self._shape = x1.shape
         return Tensor._new_contiguous(x1.dtype, x1.shape, _C.neg(x1._C_view))
 
@@ -513,6 +513,10 @@ def _binary_kernel_op(
     """Shortcut for any binary operator kernel."""
     out_set = out is not None
     if out_set:
+        if out.is_leaf and out.requires_grad:
+            raise RuntimeError(
+                "A leaf variable that requires grad is being used in an in-place op."
+            )
         dtype = out.dtype
         shape = out.shape
     else:

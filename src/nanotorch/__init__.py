@@ -76,6 +76,12 @@ if not sorted(__all__) == __all__:
     raise ImportError("__all__ should be sorted.")
 
 
+def manual_seed(seed: int) -> None:
+    import numpy as np  # FIXME: implement nt.rand without np
+
+    np.random.seed(seed)
+
+
 def _totensor(x: TensorLike):
     return x if isinstance(x, Tensor) else Tensor(x)
 

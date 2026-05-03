@@ -1,8 +1,12 @@
+import math
+
 import pytest
 
 import nanotorch as nt
 import nanotorch.autograd as ag
 from nanotorch import testing
+
+nt.manual_seed(42)
 
 
 @pytest.mark.parametrize(
@@ -170,3 +174,24 @@ def test_backward_transpose():
     assert g.grad is None
     assert x.grad is not None
     testing.assert_allclose(x.grad, g.T)
+
+
+def test_backward_inplace_ops_leaf_raises():
+    x2 = nt.tensor([5.0, 1.0], requires_grad=True)
+    with pytest.raises(RuntimeError):
+        x2 *= 1.5
+
+
+def test_backward_order_unbalanced():
+    x = nt.tensor([1.0, 2.0], requires_grad=True)
+    a = x.exp()
+    b = a * 2
+    c = a * 3
+    loss = (b + c).sum()
+    loss.backward()
+    assert loss.grad is None
+    assert c.grad is None
+    assert b.grad is None
+    assert a.grad is None
+    assert x.grad is not None
+    testing.assert_allclose(x.grad, nt.tensor([5 * math.e, 5 * math.e**2]))
