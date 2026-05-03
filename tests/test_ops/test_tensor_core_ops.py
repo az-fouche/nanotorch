@@ -1,10 +1,7 @@
-import math
-
 import numpy as np
 import pytest
 
 import nanotorch as nt
-from nanotorch import testing
 
 # Tolist
 
@@ -15,6 +12,7 @@ def test_tolist():
 
 
 def test_tolist_extensive():
+    # Using numpy here allows to check against a "ground truth"
     np.random.seed(42)
     for _ in range(100):
         ndim = np.random.randint(0, 5)

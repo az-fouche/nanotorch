@@ -198,9 +198,13 @@ def rand(
         Device to store the Tensor on. Operations will be automatically performed
         on device if there is an available kernel.
     """
-    from numpy.random import rand  # FIXME(#16): drop numpy dep
-
-    return Tensor(rand(*shape), dtype=dtype, requires_grad=requires_grad, device=device)  # type: ignore
+    if dtype <= dt.int64:
+        raise ValueError("rand() cannot output non-float values.")
+    return _tensor_factory(
+        *shape,
+        storage=_C.uniform(math.prod(shape), dtype, get_std_device(device)),
+        requires_grad=requires_grad,
+    )
 
 
 def _tensor_factory(

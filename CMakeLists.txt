@@ -23,6 +23,7 @@ pybind11_add_module(_C MODULE
     src/cpp/_C.cpp 
     src/cpp/storage.cpp
     src/cpp/ops.cpp
+    src/cpp/factory.cpp
     src/cpp/cuda/cuda.cpp
     src/cpp/cuda/unary_ops.cu
 )

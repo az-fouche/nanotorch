@@ -1,5 +1,6 @@
 """Main nanotorch module initialization point."""
 
+from . import _C
 from ._data_type import Dtype, bool_, float32, float64, int32, int64
 from ._device import Device, is_cuda_available
 from .autograd import (
@@ -82,9 +83,8 @@ if not sorted(__all__) == __all__:
 
 
 def manual_seed(seed: int) -> None:
-    import numpy as np  # FIXME(#9): implement nt.rand without np
-
-    np.random.seed(seed)
+    """Set the random seed of the nanotorch's RNG engine."""
+    _C.manual_seed(seed)
 
 
 def _totensor(x: TensorLike):

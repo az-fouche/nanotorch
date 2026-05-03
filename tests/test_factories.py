@@ -2,6 +2,7 @@ import pytest
 from conftest import requires_cuda
 
 import nanotorch as nt
+from nanotorch import testing
 
 
 @pytest.mark.parametrize("factory", [nt.zeros, nt.ones])
@@ -210,3 +211,9 @@ def test_cuda(factory, args, kwargs):
     assert x_cuda.device == nt.Device.Cuda
     assert x_cuda.to("cpu").device == nt.Device.Cpu
     assert x_cuda.to("cpu").tolist() == x_cpu.tolist()
+
+
+def test_manual_seed():
+    nt.manual_seed(42)
+    testing.assert_allclose(nt.rand(1), nt.tensor([0.7551555037498474]))
+    testing.assert_allclose(nt.rand(1), nt.tensor([0.6390313506126404]))
