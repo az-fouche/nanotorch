@@ -157,7 +157,7 @@ std::shared_ptr<Storage> _binary_op_generic(
                     idx1 += x1.strides[j] * loc[j];
                     idx2 += x2.strides[j] * loc[j];
                 }
-                ptrout[i] = func(ptr1[idx1], ptr2[idx2]);
+                ptrout[i] = static_cast<O>(func(ptr1[idx1], ptr2[idx2]));
 
                 // Loc update
                 py::ssize_t j = n_axes - 1;
