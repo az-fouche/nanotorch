@@ -44,7 +44,11 @@ def test_tolist_extensive():
     ],
 )
 def test_tensor_sum(input, expected):
-    x = nt.tensor(*input)
+    if len(input) == 2:
+        input, dtype = input
+        x = nt.tensor(input, dtype=dtype)
+    else:
+        x = nt.tensor(*input)
     result = x.sum()
     assert result.tolist() == expected
 

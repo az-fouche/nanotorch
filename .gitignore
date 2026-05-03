@@ -9,6 +9,7 @@ memory/
 .claude
 .pytest_cache
 .vscode
+build-ide/
 
 # Virtual environments
 .venv

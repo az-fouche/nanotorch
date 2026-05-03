@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.15...3.29)
 
-project(nanotorch LANGUAGES CXX)
+project(nanotorch LANGUAGES CXX CUDA)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 execute_process(
@@ -16,12 +17,15 @@ execute_process(
     COMMAND_ERROR_IS_FATAL ANY
 )
 find_package(pybind11 CONFIG REQUIRED)
+find_package(CUDAToolkit REQUIRED)
 
 pybind11_add_module(_C MODULE 
     src/cpp/_C.cpp 
     src/cpp/storage.cpp
     src/cpp/ops.cpp
+    src/cpp/cuda.cpp
 )
+target_link_libraries(_C PRIVATE CUDA::cudart)
 target_compile_options(_C PRIVATE 
     $<$<CXX_COMPILER_ID:MSVC>:/W4>
     $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic>

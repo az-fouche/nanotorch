@@ -4,6 +4,8 @@ from typing import Any
 
 from nanotorch.core import Tensor
 
+from .grad_mode import is_grad_enabled
+
 
 class Function:
     """Base class for all derivable tensor operations.
@@ -48,10 +50,11 @@ class Function:
         self._inputs = args
         self._inputs_kw = kwargs
         output = self.forward(*args, **kwargs)
-        if any(output is arg for arg in list(args) + list(kwargs.values())):
-            output = output._alias()  # keeps DAG structure
-        if any(t.requires_grad for t in args if isinstance(t, Tensor)):
-            output.attach_grad_fn(self)
+        if is_grad_enabled():
+            if any(output is arg for arg in list(args) + list(kwargs.values())):
+                output = output._alias()  # keeps DAG structure
+            if any(t.requires_grad for t in args if isinstance(t, Tensor)):
+                output.attach_grad_fn(self)
         return output
 
     def save_for_backward(self, *tensors: Tensor) -> None:

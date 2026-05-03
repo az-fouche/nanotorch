@@ -9,6 +9,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "cuda.h"
+
 #if defined(_MSC_VER) && !defined(__clang__)
     #define NT_UNREACHABLE() __assume(false)
 #elif defined(__GNUC__) || defined(__clang__)
@@ -39,6 +41,11 @@ enum class Dtype : uint8_t {
     Float64
 };
 
+enum class Device : uint8_t {
+    Cpu,
+    Cuda
+};
+
 std::string dtype_to_format(Dtype dtype);
 Dtype format_to_dtype(const std::string& format);
 py::ssize_t dtype_itemsize(Dtype dtype);
@@ -55,30 +62,56 @@ auto dispatch_dtype(Dtype dtype, F&& func) {
     }
 }
 
+// Device-agnostic memory pointer handling cleanup
+struct BufDeleter {
+    Device device;
+    void operator()(void* p) const noexcept {
+        if (!p) return;
+        if (device == Device::Cuda) cudaFree(p);
+        else ::operator delete(p);
+    }
+};
+using Buffer = std::unique_ptr<void, BufDeleter>;
+inline Buffer make_buffer(size_t nbytes, Device device) {
+    void* p = nullptr;
+    if (device == Device::Cuda) {
+        cudaMalloc(&p, nbytes);
+        cudaMemset(&p, 0, nbytes);
+    }
+    else {
+        p = ::operator new(nbytes);
+        std::memset(p, 0, nbytes);
+    }
+
+    return Buffer(p, BufDeleter{device});
+}
+
+// 1D data container for tensors
 class Storage : public std::enable_shared_from_this<Storage> {
-    // Holds a contiguous memory slice
 public:
-    Storage(py::ssize_t n, Dtype dtype);
+    Storage(py::ssize_t n, Dtype dtype, Device device);
     Storage(const Storage&) = delete;
     Storage& operator=(const Storage&) = delete;
     Storage(Storage&&) = default;
     Storage& operator=(Storage&&) = default;
 
     // Ops
-    static std::shared_ptr<Storage> allocate(py::ssize_t n, Dtype dtype);
-    static std::shared_ptr<Storage> from_iterable(py::sequence values, Dtype dtype);
+    static std::shared_ptr<Storage> allocate(py::ssize_t n, Dtype dtype, Device device);
+    static std::shared_ptr<Storage> from_iterable(py::sequence values, Dtype dtype, Device device);
     std::shared_ptr<Storage> clone() const;
+    std::shared_ptr<Storage> to(Device device) const;
     std::shared_ptr<Storage> cast(Dtype target) const;
     py::buffer_info buffer_info() const;
 
-    void* data() { return data_.data(); }
-    const void* data() const { return data_.data(); }
+    void* data() { return buffer_.get(); }
+    const void* data() const { return buffer_.get(); }
+    Device device() const { return buffer_.get_deleter().device; }
     py::ssize_t size() const { return n_; }
     py::ssize_t itemsize() const { return dtype_itemsize(dtype_); }
     Dtype dtype() const { return dtype_; }
 
 private:
-    std::vector<char> data_;
+    Buffer buffer_;
     Dtype dtype_;
     py::ssize_t n_;
 };

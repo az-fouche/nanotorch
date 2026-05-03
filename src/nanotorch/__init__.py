@@ -1,6 +1,7 @@
 """Main nanotorch module initialization point."""
 
 from ._data_type import Dtype, bool_, float32, float64, int32, int64
+from ._device import Device, is_cuda_available
 from .autograd import (
     AddOp,
     ExpOp,
@@ -39,6 +40,7 @@ from .ops import (
 )
 
 __all__ = [
+    "Device",
     "Dtype",
     "Tensor",
     "TensorLike",
@@ -56,6 +58,7 @@ __all__ = [
     "full",
     "int32",
     "int64",
+    "is_cuda_available",
     "log",
     "matmul",
     "mean",

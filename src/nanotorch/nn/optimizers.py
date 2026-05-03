@@ -2,6 +2,7 @@
 
 from typing import Sequence
 
+import nanotorch.autograd as ag
 from nanotorch.core import Tensor
 
 
@@ -46,4 +47,5 @@ class GradientDescent(Optimizer):
             if p.requires_grad:
                 if p.grad is None:
                     raise RuntimeError("Gradients not set, did you call backward?")
-                p -= p.grad * self._lr
+                with ag.no_grad():
+                    p -= p.grad * self._lr

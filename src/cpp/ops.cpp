@@ -10,66 +10,50 @@ py::ssize_t numel_from_shape(const std::vector<py::ssize_t>& shape) {
 
 // Factory
 
-std::shared_ptr<Storage> zeros(py::ssize_t n, Dtype dtype) {
-    return Storage::allocate(n, dtype); // 0 by default
+std::shared_ptr<Storage> zeros(py::ssize_t n, Dtype dtype, Device device) {
+    return Storage::allocate(n, dtype, device); // 0 by default
 }
 
-std::shared_ptr<Storage> zeros(const std::vector<py::ssize_t>& shape, Dtype dtype) {
-    return zeros(numel_from_shape(shape), dtype); // 0 by default
-}
-
-std::shared_ptr<Storage> ones(py::ssize_t n, Dtype dtype) {
-    auto storage = zeros(n, dtype);
+std::shared_ptr<Storage> ones(py::ssize_t n, Dtype dtype, Device device) {
+    auto storage = zeros(n, dtype, Device::Cpu); 
     dispatch_dtype(dtype, [&]<typename T>() {
         auto data = static_cast<T*>(storage->data());
         for (py::ssize_t i = 0; i < storage->size(); ++i)
             data[i] = static_cast<T>(1);
     });
-    return storage;
+    return storage->to(device);
 }
 
-std::shared_ptr<Storage> ones(const std::vector<py::ssize_t>& shape, Dtype dtype) {
-    return ones(numel_from_shape(shape), dtype);
-}
-
-std::shared_ptr<Storage> full(py::ssize_t n, Scalar value, Dtype dtype) {
-    auto storage = zeros(n, dtype);
+std::shared_ptr<Storage> full(py::ssize_t n, Scalar value, Dtype dtype, Device device) {
+    auto storage = zeros(n, dtype, Device::Cpu); // TODO: Avoid device move
     dispatch_dtype(dtype, [&]<typename T>() {
         auto data = static_cast<T*>(storage->data());
         auto fill = value.item<T>();
         for (py::ssize_t i = 0; i < storage->size(); ++i)
             data[i] = fill;
     });
-    return storage;
+    return storage->to(device);
 }
 
-std::shared_ptr<Storage> full(const std::vector<py::ssize_t>& shape, Scalar value, Dtype dtype) {
-    return full(numel_from_shape(shape), value, dtype);
-}
-
-std::shared_ptr<Storage> eye(py::ssize_t n, Dtype dtype) {
+std::shared_ptr<Storage> eye(py::ssize_t n, Dtype dtype, Device device) {
     py::ssize_t size = n * n;
-    auto storage = zeros(size, dtype);
+    auto storage = zeros(size, dtype, Device::Cpu);
     dispatch_dtype(dtype, [&]<typename T>() {
         auto data = static_cast<T*>(storage->data());
         for (py::ssize_t i = 0; i < n; ++i)
             data[i + i * n] = static_cast<T>(1);
     });
-    return storage;
+    return storage->to(device);
 }
 
-std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t step, Dtype dtype) {
-    auto storage = zeros(n, dtype);
+std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start, py::ssize_t step, Dtype dtype, Device device) {
+    auto storage = zeros(n, dtype, Device::Cpu);
     dispatch_dtype(dtype, [&]<typename T>() {
         auto data = static_cast<T*>(storage->data());
         for (py::ssize_t i = 0; i < n; ++i)
             data[i] = static_cast<T>(start + i * step);
     });
-    return storage;
-}
-
-std::shared_ptr<Storage> arange(py::ssize_t n, Dtype dtype) {
-    return arange(n, 0, 1, dtype);
+    return storage->to(device);
 }
 
 // Ops
@@ -97,7 +81,7 @@ std::shared_ptr<Storage> sum(
 
     auto numel_drop = numel_from_shape(shape_drop);
     auto numel_keep = numel_from_shape(shape_keep);
-    auto dst_storage = Storage::allocate(numel_keep, dtype);
+    auto dst_storage = Storage::allocate(numel_keep, dtype, Device::Cpu);
 
     return dispatch_dtype(x.storage->dtype(), [&]<typename T_src>() {
         return dispatch_dtype(dtype, [&]<typename T_dst>() {
@@ -144,7 +128,7 @@ template <typename F>
 std::shared_ptr<Storage> _unary_op_generic(const TensorView& x, F&& func) {
     auto n_axes = static_cast<py::ssize_t>(x.shape.size());
     auto numel = numel_from_shape(x.shape);
-    auto result = Storage::allocate(numel, x.storage->dtype());
+    auto result = Storage::allocate(numel, x.storage->dtype(), x.storage->device());
     return dispatch_dtype(x.storage->dtype(), [&]<typename T>() {
         auto* data_in = static_cast<const T*>(x.storage->data());
         auto* data_out = static_cast<T*>(result->data());
@@ -192,7 +176,7 @@ std::shared_ptr<Storage> _binary_op_generic(
     auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
     auto numel = numel_from_shape(x1.shape);
     auto eff_dtype = out_dtype.value_or(s1->dtype());
-    auto new_storage = Storage::allocate(numel, eff_dtype);
+    auto new_storage = Storage::allocate(numel, eff_dtype, x1.storage->device());
     return dispatch_dtype(eff_dtype, [&]<typename O>() {
         return dispatch_dtype(s1->dtype(), [&]<typename T>() {
             auto* ptr1 = static_cast<const T*>(s1->data());
@@ -281,7 +265,7 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     out_shape[ndim - 1] = rsize;
 
     auto numel = numel_from_shape(out_shape);
-    auto new_storage = Storage::allocate(numel, x1.storage->dtype());
+    auto new_storage = Storage::allocate(numel, x1.storage->dtype(), Device::Cpu);
     std::vector<py::ssize_t> loc(ndim);
     return dispatch_dtype(s1->dtype(), [&]<typename T>() {
         auto* ptr1 = static_cast<const T*>(s1->data());
@@ -546,7 +530,7 @@ std::shared_ptr<Storage> gather_from_axes(
     py::ssize_t ind_ndim = fancy_dims_data.empty() ? 0 : (py::ssize_t)fancy_dims_data[0].shape.size();
     py::ssize_t out_ndim = new_shape.size();
     py::ssize_t numel = numel_from_shape(new_shape);
-    auto new_storage = Storage::allocate(numel, x.storage->dtype());
+    auto new_storage = Storage::allocate(numel, x.storage->dtype(), Device::Cpu);
 
     auto indexers_data = std::vector<const int64_t*>(fancy_dims_data.size());
     for (size_t q = 0; q < indexers_data.size(); ++q) 
@@ -606,28 +590,32 @@ std::shared_ptr<Storage> gather_from_axes(
 
 void bind_ops_(py::module_& m) {
     m.def(
-        "zeros", py::overload_cast<const std::vector<py::ssize_t>&, Dtype>(&zeros), 
-        "Initialize a zeros-filled vector", py::arg("shape"), py::arg("dtype")
+        "zeros", &zeros, "Initialize a zeros-filled vector", 
+        py::arg("shape"), py::arg("dtype"), py::arg("device")
     );
     m.def(
-        "ones", py::overload_cast<const std::vector<py::ssize_t>&, Dtype>(&ones), 
-        "Initialize a ones-filled vector", py::arg("shape"), py::arg("dtype")
+        "ones", &ones, "Initialize a ones-filled vector", 
+        py::arg("shape"), py::arg("dtype"), py::arg("device")
     );
     m.def(
-        "full", py::overload_cast<const std::vector<py::ssize_t>&, Scalar, Dtype>(&full), 
-        "Initialize a filled vector", py::arg("shape"), py::arg("value"), py::arg("dtype")
+        "full", &full, "Initialize a filled vector", 
+        py::arg("shape"), py::arg("value"), py::arg("dtype"), py::arg("device")
     );
     m.def(
-        "eye", py::overload_cast<py::ssize_t, Dtype>(&eye), 
-        "Initialize an eye matrix.", py::arg("n"), py::arg("dtype")
+        "eye", &eye, "Initialize an eye matrix.", 
+        py::arg("n"), py::arg("dtype"), py::arg("device")
     );
     m.def(
-        "arange", py::overload_cast<py::ssize_t, py::ssize_t, py::ssize_t, Dtype>(&arange), 
-        "Initialize a range vector", py::arg("n"), py::arg("start"), py::arg("step"), py::arg("dtype")
+        "arange", &arange, "Initialize a range vector", 
+        py::arg("n"), py::arg("start"), py::arg("step"), py::arg("dtype"), py::arg("device")
     );
     m.def(
         "cast", [](const Storage& s, Dtype t) { return s.cast(t); }, 
         "Cast a storage to another dtype.", py::arg("storage"), py::arg("dtype")
+    );
+    m.def(
+        "to", [](const Storage& s, Device d) { return s.to(d); }, 
+        "Move a storage to another device.", py::arg("storage"), py::arg("device")
     );
     m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("keepdim"), py::arg("dtype"));
     m.def("add", &add, "Add elements pointwise.", py::arg("x1"), py::arg("x2"));

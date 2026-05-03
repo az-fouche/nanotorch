@@ -1,6 +1,7 @@
 """Autograd engine."""
 
 from .function import Function
+from .grad_mode import no_grad
 from .ops import (
     AddOp,
     ExpOp,
@@ -38,4 +39,5 @@ __all__ = [
     "equal_op",
     "greater_eq_op",
     "greater_op",
+    "no_grad",
 ]

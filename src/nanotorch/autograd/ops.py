@@ -1,5 +1,6 @@
 """Usual differentiable tensor operations and their derivative."""
 
+import math
 from typing import Callable
 
 from nanotorch import _C
@@ -8,6 +9,7 @@ from nanotorch._indexing import TensorShape, broadcast_shapes
 from nanotorch.core import Tensor
 
 from .function import Function
+from .grad_mode import is_grad_enabled
 
 
 class AddOp(Function):
@@ -164,7 +166,7 @@ class NegOp(Function):
 
     def forward(self, x1: Tensor) -> Tensor:
         self._shape = x1.shape
-        return Tensor._new_contiguous(x1.dtype, x1.shape, _C.neg(x1._C_view))
+        return Tensor._new_contiguous(_C.neg(x1._C_view), x1.shape)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (_unbroadcast(-1 * grad_out, self._shape),)
@@ -189,7 +191,7 @@ class ExpOp(Function):
             return x
         dtype = promote_dtypes(x.dtype, Dtype.Float32)
         x = x.to(dtype)
-        e_x = Tensor._new_contiguous(x.dtype, x.shape, _C.exp(x._C_view))
+        e_x = Tensor._new_contiguous(_C.exp(x._C_view), x.shape)
         self.save_for_backward(e_x)
         return e_x
 
@@ -217,7 +219,7 @@ class LogOp(Function):
         dtype = promote_dtypes(x.dtype, Dtype.Float32)
         x = x.to(dtype)
         self.save_for_backward(x)
-        return Tensor._new_contiguous(dtype, x.shape, _C.log(x._C_view))
+        return Tensor._new_contiguous(_C.log(x._C_view), x.shape)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (grad_out * self.saved_tensors[0] ** -1,)
@@ -249,9 +251,7 @@ class PowOp(Function):
         if exponent_fp < 0 and dtype <= Dtype.Int64:
             raise RuntimeError("Cannot use negative exponent with integer tensor.")
         self.save_for_backward(x, exponent)
-        return Tensor._new_contiguous(
-            dtype, x.shape, _C.pow(x.to(dtype)._C_view, exponent_fp)
-        )
+        return Tensor._new_contiguous(_C.pow(x.to(dtype)._C_view, exponent_fp), x.shape)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         x, exponent = self.saved_tensors
@@ -314,13 +314,13 @@ class SumOp(Function):
             dtype = max(x.dtype, Dtype.Int64)
 
         if x.is_empty:
-            return Tensor._new_contiguous(dtype, new_shape, _C.zeros(new_shape, dtype))
+            return Tensor._new_contiguous(
+                _C.zeros(math.prod(new_shape), dtype, x.device), new_shape
+            )
         self._orig_shape = x.shape
 
         return Tensor._new_contiguous(
-            dtype=dtype,
-            shape=new_shape,
-            storage=_C.sum(x._C_view, axis, keepdim, dtype),
+            _C.sum(x._C_view, axis, keepdim, dtype), new_shape
         )
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
@@ -380,9 +380,8 @@ class TransposeOp(Function):
             return x
         strides, offset = x.strides
         return Tensor._new_view(
-            x.dtype,
-            tuple(reversed(x.shape)),
             x.storage,
+            tuple(reversed(x.shape)),
             tuple(reversed(strides)),
             offset,
         )
@@ -422,9 +421,7 @@ class MatmulOp(Function):
         if x2.ndim == 1 and self._shape2[-2:] == (x2.shape[0], 1):
             x2 = x2.reshape(x2.shape[0], 1)  # Cannot expand to the right
         x2 = x2.to(dtype).expand(self._shape2)
-        return Tensor._new_contiguous(
-            dtype=dtype, shape=shape_out, storage=_C.matmul(x1._C_view, x2._C_view)
-        )
+        return Tensor._new_contiguous(_C.matmul(x1._C_view, x2._C_view), shape_out)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         x1, x2 = self.saved_tensors
@@ -451,7 +448,7 @@ class ReluOp(Function):
     """Rectified linear unit."""
 
     def forward(self, x: Tensor) -> Tensor:
-        result = Tensor._new_contiguous(x.dtype, x.shape, _C.relu(x._C_view))
+        result = Tensor._new_contiguous(_C.relu(x._C_view), x.shape)
         self.save_for_backward(result)
         return result
 
@@ -465,9 +462,7 @@ def equal_op(x1: Tensor, x2: Tensor) -> Tensor:
     shape = broadcast_shapes(x1.shape, x2.shape)
     x1 = x1.to(dtype).expand(shape)
     x2 = x2.to(dtype).expand(shape)
-    return Tensor._new_contiguous(
-        Dtype.Bool, x1.shape, _C.pw_equal(x1._C_view, x2._C_view)
-    )
+    return Tensor._new_contiguous(_C.pw_equal(x1._C_view, x2._C_view), x1.shape)
 
 
 def greater_op(x1: Tensor, x2: Tensor) -> Tensor:
@@ -475,9 +470,7 @@ def greater_op(x1: Tensor, x2: Tensor) -> Tensor:
     shape = broadcast_shapes(x1.shape, x2.shape)
     x1 = x1.to(dtype).expand(shape)
     x2 = x2.to(dtype).expand(shape)
-    return Tensor._new_contiguous(
-        Dtype.Bool, x1.shape, _C.pw_greater(x1._C_view, x2._C_view)
-    )
+    return Tensor._new_contiguous(_C.pw_greater(x1._C_view, x2._C_view), x1.shape)
 
 
 def greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
@@ -485,9 +478,7 @@ def greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
     shape = broadcast_shapes(x1.shape, x2.shape)
     x1 = x1.to(dtype).expand(shape)
     x2 = x2.to(dtype).expand(shape)
-    return Tensor._new_contiguous(
-        Dtype.Bool, x1.shape, _C.pw_greater_eq(x1._C_view, x2._C_view)
-    )
+    return Tensor._new_contiguous(_C.pw_greater_eq(x1._C_view, x2._C_view), x1.shape)
 
 
 def _unbroadcast(x: Tensor, shape: TensorShape) -> Tensor:
@@ -511,7 +502,7 @@ def _binary_kernel_op(
     """Shortcut for any binary operator kernel."""
     out_set = out is not None
     if out_set:
-        if out.is_leaf and out.requires_grad:
+        if out.is_leaf and out.requires_grad and is_grad_enabled():
             raise RuntimeError(
                 "A leaf variable that requires grad is being used in an in-place op."
             )
@@ -526,16 +517,12 @@ def _binary_kernel_op(
     x2 = x2.to(dtype).expand(shape)
 
     if out is None:
-        return Tensor._new_contiguous(
-            dtype=dtype, shape=shape, storage=op(x1._C_view, x2._C_view)
-        )
+        return Tensor._new_contiguous(op(x1._C_view, x2._C_view), shape)
     if out_is_x1:
         op_inplace(x1._C_view, x2._C_view)
         return x1
 
-    result = Tensor._new_contiguous(
-        dtype=dtype, shape=shape, storage=op(x1._C_view, x2._C_view)
-    )
+    result = Tensor._new_contiguous(op(x1._C_view, x2._C_view), shape)
     _C.copy_inplace(out._C_view, result._C_view)
     return result
 

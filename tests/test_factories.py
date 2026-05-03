@@ -1,10 +1,11 @@
 import pytest
+from conftest import requires_cuda
 
 import nanotorch as nt
 
 
 @pytest.mark.parametrize("factory", [nt.zeros, nt.ones])
-def test_empty(factory):
+def test_factory_empty(factory):
     x = factory(0)
     assert x.tolist() == []
     assert x.shape == (0,)
@@ -19,7 +20,7 @@ def test_empty(factory):
         (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
-def test_zeros_scalar(factory, expected):
+def test_factory_scalar(factory, expected):
     x = factory()
     assert x.tolist() == pytest.approx(expected)
     assert x.shape == ()
@@ -34,7 +35,7 @@ def test_zeros_scalar(factory, expected):
         (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
-def test_zeros_1d(factory, expected):
+def test_factory_1d(factory, expected):
     x = factory(3)
     assert x.tolist() == [pytest.approx(expected) for _ in range(3)]
     assert x.shape == (3,)
@@ -49,7 +50,7 @@ def test_zeros_1d(factory, expected):
         (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
-def test_zeros_2d(factory, expected):
+def test_factory_2d(factory, expected):
     x = factory(3, 5)
     assert x.tolist() == [[pytest.approx(expected) for _ in range(5)] for _ in range(3)]
     assert x.shape == (3, 5)
@@ -64,7 +65,7 @@ def test_zeros_2d(factory, expected):
         (lambda *shape: nt.full(*shape, value=3.14), 3.14),
     ],
 )
-def test_zeros_3d(factory, expected):
+def test_factory_3d(factory, expected):
     x = factory(3, 5, 2)
     assert x.tolist() == [
         [[pytest.approx(expected) for _ in range(2)] for _ in range(5)]
@@ -189,3 +190,23 @@ def test_rand_1d():
 def test_rand_2d():
     x = nt.rand(10, 5)
     assert x.shape == (10, 5)
+
+
+@requires_cuda
+@pytest.mark.parametrize(
+    "factory,args,kwargs",
+    [
+        (nt.zeros, (5, 5), {}),
+        (nt.ones, (5, 5), {}),
+        (nt.full, (5, 5), {"value": 3}),
+        (nt.arange, (10,), {}),
+        (nt.eye, (5,), {}),
+    ],
+)
+def test_cuda(factory, args, kwargs):
+    x_cpu = factory(*args, **kwargs, device="cpu")
+    x_cuda = factory(*args, **kwargs, device="cuda")
+    assert x_cpu.device == nt.Device.Cpu
+    assert x_cuda.device == nt.Device.Cuda
+    assert x_cuda.to("cpu").device == nt.Device.Cpu
+    assert x_cuda.to("cpu").tolist() == x_cpu.tolist()

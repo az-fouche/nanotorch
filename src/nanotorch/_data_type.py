@@ -22,12 +22,12 @@ def is_bool(x: Dtype) -> bool:
     return x == Dtype.Bool
 
 
-def is_int(self) -> bool:
-    return self in (Dtype.Int32, Dtype.Int64)
+def is_int(x) -> bool:
+    return x in (Dtype.Int32, Dtype.Int64)
 
 
-def is_float(self) -> bool:
-    return self in (Dtype.Float32, Dtype.Float64)
+def is_float(x) -> bool:
+    return x in (Dtype.Float32, Dtype.Float64)
 
 
 def promote_dtypes(*dtypes: Dtype) -> Dtype:
