@@ -1,5 +1,6 @@
 import pytest
 import torch
+from conftest import requires_cuda
 
 import nanotorch as nt
 from nanotorch import testing
@@ -206,11 +207,24 @@ OPS_SPEC = [
         nt.tensor([[8.0, 26.0]]).expand((8, 3, 2)),
     ),
 ]
+CUDA_COMPATIBLE_OPS = [nt.add, nt.subtract, nt.multiply, nt.divide]
 
 
 @pytest.mark.parametrize("self, other, op, result", OPS_SPEC)
 def test_ops_vs_expected(self, other, op, result):
     assert op(self, other).equals(result)
+
+
+@requires_cuda
+@pytest.mark.parametrize("self, other, op, result", OPS_SPEC)
+def test_ops_vs_expected_cuda(self, other, op, result):
+    if op not in CUDA_COMPATIBLE_OPS:
+        return
+    if isinstance(self, nt.Tensor):
+        self = self.to("cuda")
+    if isinstance(other, nt.Tensor):
+        other = other.to("cuda")
+    assert op(self, other).cpu().equals(result)
 
 
 def test_matmul_invalid_1d_wrongside():

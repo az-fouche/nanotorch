@@ -87,34 +87,52 @@ def manual_seed(seed: int) -> None:
     _C.manual_seed(seed)
 
 
-def _totensor(x: TensorLike):
-    return x if isinstance(x, Tensor) else Tensor(x)
+def _totensor(x: TensorLike, *, anchor: Tensor):
+    if isinstance(x, Tensor):
+        return x
+    return Tensor(x, device=anchor.device)
 
 
 # Runtime autograd ops binding to avoid circular imports
-Tensor.__add__ = lambda self, other: AddOp.apply(self, _totensor(other))
-Tensor.__radd__ = lambda self, other: AddOp.apply(self, _totensor(other))
-Tensor.__iadd__ = lambda self, other: AddOp.apply(self, _totensor(other), out=self)
-Tensor.__mul__ = lambda self, other: MulOp.apply(self, _totensor(other))
-Tensor.__rmul__ = lambda self, other: MulOp.apply(self, _totensor(other))
-Tensor.__imul__ = lambda self, other: MulOp.apply(self, _totensor(other), out=self)
-Tensor.__sub__ = lambda self, other: SubOp.apply(self, _totensor(other))
-Tensor.__rsub__ = lambda self, other: SubOp.apply(_totensor(_totensor(other)), self)
-Tensor.__isub__ = lambda self, other: SubOp.apply(self, _totensor(other), out=self)
-Tensor.__truediv__ = lambda self, other: TrueDivOp.apply(self, _totensor(other))
-Tensor.__rtruediv__ = lambda self, other: TrueDivOp.apply(_totensor(other), self)
+Tensor.__add__ = lambda self, other: AddOp.apply(self, _totensor(other, anchor=self))
+Tensor.__radd__ = lambda self, other: AddOp.apply(self, _totensor(other, anchor=self))
+Tensor.__iadd__ = lambda self, other: AddOp.apply(
+    self, _totensor(other, anchor=self), out=self
+)
+Tensor.__mul__ = lambda self, other: MulOp.apply(self, _totensor(other, anchor=self))
+Tensor.__rmul__ = lambda self, other: MulOp.apply(self, _totensor(other, anchor=self))
+Tensor.__imul__ = lambda self, other: MulOp.apply(
+    self, _totensor(other, anchor=self), out=self
+)
+Tensor.__sub__ = lambda self, other: SubOp.apply(self, _totensor(other, anchor=self))
+Tensor.__rsub__ = lambda self, other: SubOp.apply(_totensor(other, anchor=self), self)
+Tensor.__isub__ = lambda self, other: SubOp.apply(
+    self, _totensor(other, anchor=self), out=self
+)
+Tensor.__truediv__ = lambda self, other: TrueDivOp.apply(
+    self, _totensor(other, anchor=self)
+)
+Tensor.__rtruediv__ = lambda self, other: TrueDivOp.apply(
+    _totensor(other, anchor=self), self
+)
 Tensor.__itruediv__ = lambda self, other: TrueDivOp.apply(
-    self, _totensor(other), out=self
+    self, _totensor(other, anchor=self), out=self
 )
 Tensor.__neg__ = lambda self: NegOp.apply(self)
-Tensor.__matmul__ = lambda self, other: MatmulOp.apply(self, _totensor(other))
-Tensor.__pow__ = lambda self, exponent: PowOp.apply(self, _totensor(exponent))
-Tensor.__rpow__ = lambda self, exponent: PowOp.apply(_totensor(exponent), self)
-Tensor.__eq__ = lambda self, other: equal_op(self, _totensor(other))
-Tensor.__gt__ = lambda self, other: greater_op(self, _totensor(other))
-Tensor.__ge__ = lambda self, other: greater_eq_op(self, _totensor(other))
-Tensor.__lt__ = lambda self, other: _totensor(other) > self
-Tensor.__le__ = lambda self, other: _totensor(other) >= self
+Tensor.__matmul__ = lambda self, other: MatmulOp.apply(
+    self, _totensor(other, anchor=self)
+)
+Tensor.__pow__ = lambda self, exponent: PowOp.apply(
+    self, _totensor(exponent, anchor=self)
+)
+Tensor.__rpow__ = lambda self, exponent: PowOp.apply(
+    _totensor(exponent, anchor=self), self
+)
+Tensor.__eq__ = lambda self, other: equal_op(self, _totensor(other, anchor=self))
+Tensor.__gt__ = lambda self, other: greater_op(self, _totensor(other, anchor=self))
+Tensor.__ge__ = lambda self, other: greater_eq_op(self, _totensor(other, anchor=self))
+Tensor.__lt__ = lambda self, other: _totensor(other, anchor=self) > self
+Tensor.__le__ = lambda self, other: _totensor(other, anchor=self) >= self
 Tensor.exp = lambda self: ExpOp.apply(self)
 Tensor.log = lambda self: LogOp.apply(self)
 Tensor.pow = lambda self, exponent: PowOp.apply(self, exponent)

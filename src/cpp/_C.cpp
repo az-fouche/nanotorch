@@ -4,6 +4,7 @@
 #include "ops.h"
 #include "cuda/cuda.h"
 #include "cuda/unary_ops.h"
+#include "cuda/binary_ops.h"
 
 PYBIND11_MODULE(_C, m) {
     m.doc() = "nanotorch C++ core module.";
@@ -13,4 +14,5 @@ PYBIND11_MODULE(_C, m) {
     bind_ops_(m);
     bind_cuda_(m);
     bind_unary_ops_(m);
+    bind_binary_ops_(m);
 }

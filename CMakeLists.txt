@@ -26,6 +26,7 @@ pybind11_add_module(_C MODULE
     src/cpp/factory.cpp
     src/cpp/cuda/cuda.cpp
     src/cpp/cuda/unary_ops.cu
+    src/cpp/cuda/binary_ops.cu
 )
 target_include_directories(_C PRIVATE src/cpp)
 target_link_libraries(_C PRIVATE CUDA::cudart)

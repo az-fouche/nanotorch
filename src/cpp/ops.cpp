@@ -70,89 +70,6 @@ std::shared_ptr<Storage> sum(
     });
 }
 
-template <typename Dispatch, typename F>
-std::shared_ptr<Storage> _binary_op_generic(
-    const TensorView& x1, 
-    const TensorView& x2, 
-    F&& func, 
-    std::optional<Dtype> out_dtype = std::nullopt
-) {
-    requires_cpu(x1, "_C._binary_op_generic");
-    requires_cpu(x2, "_C._binary_op_generic");
-
-    auto s1 = x1.storage;
-    auto s2 = x2.storage;
-    if (s1->dtype() != s2->dtype())
-        throw std::invalid_argument(
-            "_binary_op_generic: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
-            +  " and " + dtype_to_format(s2->dtype()) + "."
-        );
-    if (x1.shape != x2.shape)
-        throw std::invalid_argument(
-            "_binary_op_generic: expected same size tensors, got " + vec_to_string(x1.shape)
-            +  " and " + vec_to_string(x2.shape) + "."
-        );
-
-    auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
-    auto numel = numel_from_shape(x1.shape);
-    auto eff_dtype = out_dtype.value_or(s1->dtype());
-    auto new_storage = Storage::allocate(numel, eff_dtype, x1.storage->device());
-    return Dispatch::run(eff_dtype, [&]<typename O>() {
-        return Dispatch::run(s1->dtype(), [&]<typename T>() {
-            auto* ptr1 = static_cast<const T*>(s1->data());
-            auto* ptr2 = static_cast<const T*>(s2->data());
-            auto* ptrout = static_cast<O*>(new_storage->data());
-            std::vector<py::ssize_t> loc(n_axes);
-            for (py::ssize_t i = 0; i < numel; ++i) {
-                py::ssize_t idx1 = x1.offset, idx2 = x2.offset;
-                for (py::ssize_t j = 0; j < n_axes; ++j) {
-                    idx1 += x1.strides[j] * loc[j];
-                    idx2 += x2.strides[j] * loc[j];
-                }
-                ptrout[i] = static_cast<O>(func(ptr1[idx1], ptr2[idx2]));
-
-                // Loc update
-                py::ssize_t j = n_axes - 1;
-                while (j >= 0) { 
-                    loc[j] += 1;
-                    if (loc[j] < x1.shape[j]) break;
-                    loc[j] = 0;
-                    j -= 1;
-                }
-            }
-            return new_storage;
-        });
-    });
-}
-
-std::shared_ptr<Storage> add(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a + b; });
-}
-
-std::shared_ptr<Storage> subtract(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a - b; });
-}
-
-std::shared_ptr<Storage> multiply(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a * b; });
-}
-
-std::shared_ptr<Storage> divide(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchArithmetic>(x1, x2, []<class T>(T a, T b) { return a / b; });
-}
-
-std::shared_ptr<Storage> pw_equal(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a == b; }, Dtype::Bool);
-}
-
-std::shared_ptr<Storage> pw_greater(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a > b; }, Dtype::Bool);
-}
-
-std::shared_ptr<Storage> pw_greater_eq(const TensorView& x1, const TensorView& x2) {
-    return _binary_op_generic<DispatchAll>(x1, x2, []<class T>(T a, T b) { return a >= b; }, Dtype::Bool);
-}
-
 
 std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     requires_cpu(x1, "_C._binary_op_generic");
@@ -516,14 +433,7 @@ void bind_ops_(py::module_& m) {
         "Move a storage to another device.", py::arg("storage"), py::arg("device")
     );
     m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("dtype"));
-    m.def("add", &add, "Add elements pointwise.", py::arg("x1"), py::arg("x2"));
-    m.def("subtract", &subtract, "Subtract elements pointwise.", py::arg("x1"), py::arg("x2"));
-    m.def("multiply", &multiply, "Multiply elements pointwise.", py::arg("x1"), py::arg("x2"));
-    m.def("divide", &divide, "Divide elements pointwise.", py::arg("x1"), py::arg("x2"));
     m.def("matmul", &matmul, "Matrix multiplication.", py::arg("x1"), py::arg("x2"));
-    m.def("pw_greater", &pw_greater, "Per-coefficient strictly greater comparison.", py::arg("x"), py::arg("s"));
-    m.def("pw_greater_eq", &pw_greater_eq, "Per-coefficient greater/equals comparison.", py::arg("x"), py::arg("s"));
-    m.def("pw_equal", &pw_equal, "Per-coefficient equal comparison.", py::arg("x"), py::arg("s"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );

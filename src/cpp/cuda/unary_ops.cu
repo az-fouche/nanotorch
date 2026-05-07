@@ -1,5 +1,4 @@
 #include "unary_ops.h"
-
 #include "cuda.cuh"
 
 template <class Dispatch, class Op>

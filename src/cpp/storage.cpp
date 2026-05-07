@@ -13,7 +13,7 @@ std::shared_ptr<Storage> Storage::allocate(py::ssize_t n, Dtype dtype, Device de
 
 std::shared_ptr<Storage> Storage::from_iterable(py::sequence values, Dtype dtype, Device device) {
     py::size_t size = py::len(values);
-    auto storage = Storage::allocate(size, dtype, device);
+    auto storage = Storage::allocate(size, dtype, Device::Cpu);
     dispatch_dtype(dtype, [&]<typename T>() {
         auto *data_loc = static_cast<T*>(storage->data());
         for (py::size_t i = 0; i < size; ++i)
