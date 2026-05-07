@@ -127,10 +127,11 @@ class Tensor:
         return new
 
     def __repr__(self) -> str:
+        self_cpu = self.cpu()
         if self.ndim == 0:
-            return f"nt.Tensor({self.tolist()})"
+            return f"nt.Tensor({self_cpu.tolist()})"
         elif self.ndim == 1:
-            return f"nt.Tensor({_str_list_compact(self.tolist())})"
+            return f"nt.Tensor({_str_list_compact(self_cpu.tolist())})"
         elif self.ndim == 2:
             if len(self) <= 5:
                 indices = list(range(len(self)))
@@ -143,12 +144,12 @@ class Tensor:
                 if i is None:
                     buff += "..."
                 else:
-                    buff += _str_list_compact(self[i].tolist()) + ""
+                    buff += _str_list_compact(self_cpu[i].tolist()) + ""
                 if ni < len(indices) - 1:
                     buff += "\n"
             return buff + ")"
 
-        return f"nt.Tensor(shape={self.shape}, {self.numel} x <{self.dtype.name}>)"
+        return f"nt.Tensor(shape={self.shape}, {self.numel} x <{self.dtype.name}>, d: {self.device.name})"
 
     def __len__(self):
         """Number of elements over the first tensor dimension (row-first)."""

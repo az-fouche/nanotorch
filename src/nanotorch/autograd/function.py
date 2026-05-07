@@ -63,7 +63,8 @@ class Function:
 
     def save_for_backward(self, *tensors: Tensor) -> None:
         """Registers tensors for backward op, can be queried with saved_tensors."""
-        self._saved_tensors = tuple((x, x.version) for x in tensors)
+        if is_grad_enabled():
+            self._saved_tensors = tuple((x, x.version) for x in tensors)
 
     def forward(self, *inputs: Any) -> Tensor:
         """Defines ops forward (op-specific)."""

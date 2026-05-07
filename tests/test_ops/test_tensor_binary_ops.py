@@ -133,6 +133,67 @@ OPS_SPEC = [
         nt.divide,
         nt.full(5, 7, value=3.14),
     ),
+    # comparisons
+    (
+        nt.arange(12).reshape(3, 4),
+        3,
+        nt.eq,
+        nt.tensor([i == 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        3,
+        nt.gt,
+        nt.tensor([i > 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        3,
+        nt.geq,
+        nt.tensor([i >= 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        3,
+        nt.lt,
+        nt.tensor([i < 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        3,
+        nt.leq,
+        nt.tensor([i <= 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        nt.full(3, 4, value=3.0),
+        nt.eq,
+        nt.tensor([i == 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        nt.full(3, 4, value=3.0),
+        nt.gt,
+        nt.tensor([i > 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        nt.full(3, 4, value=3.0),
+        nt.geq,
+        nt.tensor([i >= 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        nt.full(3, 4, value=3.0),
+        nt.lt,
+        nt.tensor([i < 3 for i in range(12)]).reshape(3, 4),
+    ),
+    (
+        nt.arange(12).reshape(3, 4),
+        nt.full(3, 4, value=3.0),
+        nt.leq,
+        nt.tensor([i <= 3 for i in range(12)]).reshape(3, 4),
+    ),
     # matmul
     (
         nt.tensor([[1.0, 2.0], [3.0, 4.0]]),
@@ -207,7 +268,17 @@ OPS_SPEC = [
         nt.tensor([[8.0, 26.0]]).expand((8, 3, 2)),
     ),
 ]
-CUDA_COMPATIBLE_OPS = [nt.add, nt.subtract, nt.multiply, nt.divide]
+CUDA_COMPATIBLE_OPS = [
+    nt.add,
+    nt.subtract,
+    nt.multiply,
+    nt.divide,
+    nt.eq,
+    nt.geq,
+    nt.gt,
+    nt.leq,
+    nt.lt,
+]
 
 
 @pytest.mark.parametrize("self, other, op, result", OPS_SPEC)

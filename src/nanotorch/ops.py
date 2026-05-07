@@ -51,6 +51,31 @@ def divide(x: Tensor, y: Tensor) -> Tensor:
     return x / y
 
 
+def eq(x: Tensor, y: Tensor) -> Tensor:
+    """Computes x == y element-wise."""
+    return x == y
+
+
+def gt(x: Tensor, y: Tensor) -> Tensor:
+    """Computes x > y element-wise."""
+    return x > y
+
+
+def geq(x: Tensor, y: Tensor) -> Tensor:
+    """Computes x >= y element-wise."""
+    return x >= y
+
+
+def lt(x: Tensor, y: Tensor) -> Tensor:
+    """Computes x < y element-wise."""
+    return x < y
+
+
+def leq(x: Tensor, y: Tensor) -> Tensor:
+    """Computes x <= y element-wise."""
+    return x <= y
+
+
 @inherit_doc(autograd.NegOp)
 def negate(x: Tensor) -> Tensor:
     return -x
