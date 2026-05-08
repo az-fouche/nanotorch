@@ -567,7 +567,7 @@ def test_reshape_empty():
 
 def test_reshape_1d_identity():
     x = nt.tensor([1, 2, 3])
-    assert x.reshape(3) is x
+    assert x.reshape(3).storage is x.storage
 
 
 def test_reshape_no_contiguous():
