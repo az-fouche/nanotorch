@@ -329,3 +329,29 @@ def test_matmul_by_value():
         expected = nt.tensor(x1 @ x2)  # type: ignore
         value = nt.tensor(x1) @ nt.tensor(x2)  # type: ignore
         testing.assert_allclose(value, expected)
+
+
+# CUDA matmul
+
+
+@requires_cuda
+def test_matmul_dot_product_cuda():
+    assert (
+        nt.arange(5, device="cuda") @ nt.arange(5, device="cuda")
+    ).cpu().tolist() == 30.0
+
+
+@requires_cuda
+def test_matmul_by_value_cuda():
+    torch.manual_seed(42)
+    for _ in range(100):
+        ndim = int(torch.randint(2, 5, (1,)).item())
+        cdim = int(torch.randint(1, 10, (1,)).item())
+        x1dim = int(torch.randint(1, 10, (1,)).item())
+        x2dim = int(torch.randint(1, 10, (1,)).item())
+        batch_dims = [int(torch.randint(1, 10, (1,)).item()) for _ in range(ndim - 2)]
+        x1 = torch.rand(tuple(batch_dims + [x1dim, cdim]))
+        x2 = torch.rand(tuple(batch_dims + [cdim, x2dim]))
+        expected = nt.tensor(x1 @ x2)  # type: ignore
+        value = nt.tensor(x1, device="cuda") @ nt.tensor(x2, device="cuda")  # type: ignore
+        testing.assert_allclose(value.cpu(), expected)

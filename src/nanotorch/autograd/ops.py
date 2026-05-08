@@ -247,7 +247,7 @@ class PowOp(Function):
         if not isinstance(exponent, Tensor):
             exponent = Tensor(exponent)
         dtype = promote_dtypes(x.dtype, exponent.dtype)
-        exponent_fp = float(exponent.item())
+        exponent_fp = float(exponent.cpu().item())
         if exponent_fp < 0 and dtype <= Dtype.Int64:
             raise RuntimeError("Cannot use negative exponent with integer tensor.")
         self.save_for_backward(x, exponent)
@@ -452,7 +452,7 @@ class ReluOp(Function):
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         result = self.saved_tensors[0]
-        return (grad_out * greater_op(result, Tensor(0)),)
+        return (grad_out * greater_op(result, Tensor(0, device=result.device)),)
 
 
 def equal_op(x1: Tensor, x2: Tensor) -> Tensor:

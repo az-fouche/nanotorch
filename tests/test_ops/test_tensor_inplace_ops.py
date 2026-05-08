@@ -4,7 +4,6 @@ from conftest import requires_cuda
 import nanotorch as nt
 from nanotorch import _C, testing
 
-
 # ---------- Python-level inplace operators ----------
 
 
@@ -425,4 +424,5 @@ def test_inplace_does_not_invalidate_when_nothing_saved():
     y += 2
     loss = y.sum()
     loss.backward()
+    assert x.grad is not None
     testing.assert_allclose(x.grad, nt.tensor([1.0, 1.0, 1.0]))

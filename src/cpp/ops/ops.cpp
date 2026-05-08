@@ -2,76 +2,6 @@
 
 // Ops
 
-std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
-    requires_cpu(x1, "_C._binary_op_generic");
-    requires_cpu(x2, "_C._binary_op_generic");
-
-    auto s1 = x1.storage;
-    auto s2 = x2.storage;
-
-    // Sanity checks
-    if (s1->dtype() != s2->dtype())
-        throw std::invalid_argument(
-            "matmul: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
-            +  " and " + dtype_to_format(s2->dtype()) + "."
-        );
-    if (x1.shape.size() != x2.shape.size())
-        throw std::invalid_argument("matmul: x1 and x2 have different ndim.");
-    if (x1.shape.size() < 2)
-        throw std::invalid_argument("matmul: kernel should be called with >=2d tensors.");
-        
-    auto ndim = x1.shape.size();
-    auto out_shape = std::vector<py::ssize_t>(ndim);
-    for (auto i = 0; i < ndim - 2; ++i) {
-        if (x1.shape[i] != x2.shape[i]) 
-            throw std::invalid_argument("Invalid broacast shapes.");
-        else out_shape[i] = x1.shape[i];
-    }
-    py::ssize_t lsize = x1.shape[ndim - 2];
-    py::ssize_t csize = x1.shape[ndim - 1];
-    py::ssize_t rsize = x2.shape[ndim - 1];
-    if (csize != x2.shape[ndim - 2])
-        throw std::invalid_argument("Invalid matmul shape.");
-    out_shape[ndim - 2] = lsize;
-    out_shape[ndim - 1] = rsize;
-
-    auto numel = numel_from_shape(out_shape);
-    auto new_storage = Storage::allocate(numel, x1.storage->dtype(), Device::Cpu);
-    std::vector<py::ssize_t> loc(ndim);
-    return dispatch_dtype_arithmetic(s1->dtype(), [&]<typename T>() {
-        auto* ptr1 = static_cast<const T*>(s1->data());
-        auto* ptr2 = static_cast<const T*>(s2->data());
-        auto* prout = static_cast<T*>(new_storage->data());
-        for (py::ssize_t prout_idx = 0; prout_idx < numel; ++prout_idx) {
-            // B, i, j -> derive B, i, c and B, c, j
-            T acc = static_cast<T>(0.0);
-            for (int c = 0; c < csize; ++c) {
-                py::ssize_t idx1 = x1.offset 
-                                    + c * x1.strides[ndim - 1] 
-                                    + loc[ndim - 2] * x1.strides[ndim - 2];
-                py::ssize_t idx2 = x2.offset 
-                                    + c * x2.strides[ndim - 2]
-                                    + loc[ndim - 1] * x2.strides[ndim - 1];
-                for (auto dim_i = 0; dim_i < ndim - 2; ++dim_i) {
-                    idx1 += x1.strides[dim_i] * loc[dim_i];
-                    idx2 += x2.strides[dim_i] * loc[dim_i];
-                }
-                acc += ptr1[idx1] * ptr2[idx2];
-            }
-            prout[prout_idx] = acc;
-
-            py::ssize_t j = ndim - 1;
-            while (j >= 0) { 
-                loc[j] += 1;
-                if (loc[j] < out_shape[j]) break;
-                loc[j] = 0;
-                j -= 1;
-            }
-        }
-        return new_storage;
-    });
-}
-
 bool equals(const TensorView& x1, const TensorView& x2) {
     requires_cpu(x1, "_C.equals");
     requires_cpu(x2, "_C.equals");
@@ -307,7 +237,6 @@ void bind_ops_(py::module_& m) {
         "to", [](const Storage& s, Device d) { return s.to(d); }, 
         "Move a storage to another device.", py::arg("storage"), py::arg("device")
     );
-    m.def("matmul", &matmul, "Matrix multiplication.", py::arg("x1"), py::arg("x2"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );

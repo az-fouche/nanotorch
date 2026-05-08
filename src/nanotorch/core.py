@@ -313,7 +313,10 @@ class Tensor:
             if device == self.device:
                 return self
             new_buffer = _C.to(this._storage, device)
-        return Tensor._new_view(new_buffer, this.shape, this._strides, this._offset)
+        out = Tensor._new_view(new_buffer, this.shape, this._strides, this._offset)
+        if self.requires_grad and self.grad_fn is None:
+            out.enable_grad()
+        return out
 
     def cpu(self) -> Tensor:
         """Shortcut to put tensor back on host memory."""
@@ -577,7 +580,7 @@ class Tensor:
             raise RuntimeError(
                 f"Cannot call .backward() on a non-scalar tensor of shape {self.shape}"
             )
-        self._grad = Tensor(1.0, dtype=self.dtype)
+        self._grad = Tensor(1.0, dtype=self.dtype, device=self.device)
         if self.shape != ():
             self._grad = self._grad.reshape(*self.shape)
         if not self.is_leaf:
