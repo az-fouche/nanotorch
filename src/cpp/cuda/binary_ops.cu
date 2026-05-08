@@ -54,23 +54,8 @@ __global__ void _binary_kernel(
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
-
-    auto idx_a = view_a.offset;
-    auto r = i;
-    for (int j = view_a.n_axes - 1; j >= 0; --j) {
-        auto coord = r % view_a.shape[j];
-        r /= view_a.shape[j];
-        idx_a += coord * view_a.strides[j];
-    }
-
-    auto idx_b = view_b.offset;
-    r = i;
-    for (int j = view_b.n_axes - 1; j >= 0; --j) {
-        auto coord = r % view_b.shape[j];
-        r /= view_b.shape[j];
-        idx_b += coord * view_b.strides[j];
-    }
-
+    auto idx_a = unravel(i, view_a);
+    auto idx_b = unravel(i, view_b);
     out[i] = static_cast<TOut>(op(in_a[idx_a], in_b[idx_b]));
 }
 

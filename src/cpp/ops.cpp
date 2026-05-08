@@ -2,75 +2,6 @@
 
 // Ops
 
-std::shared_ptr<Storage> sum(
-    const TensorView& x, const std::vector<py::ssize_t>& axis_drop, Dtype dtype
-) {
-    requires_cpu(x, "_C.sum");
-
-    auto n_axes = static_cast<py::ssize_t>(axis_drop.size());
-    auto ndim_src = static_cast<py::ssize_t>(x.shape.size());
-    auto ndim_dst = static_cast<py::ssize_t>(ndim_src - n_axes);
-
-    // Compute both shapes
-    auto axis_keep = std::vector<py::ssize_t>(ndim_dst);
-    auto shape_drop = std::vector<py::ssize_t>(n_axes);
-    auto shape_keep = std::vector<py::ssize_t>(ndim_dst);
-    py::ssize_t posd = 0, posk = 0;
-    for (py::ssize_t p = 0; p < ndim_src; ++p)
-        if (std::find(axis_drop.begin(), axis_drop.end(), p) != axis_drop.end())
-            shape_drop[posd++] = x.shape[p];
-        else {
-            axis_keep[posk] = p;
-            shape_keep[posk] = x.shape[p];
-            posk++;
-        }
-
-    auto numel_drop = numel_from_shape(shape_drop);
-    auto numel_keep = numel_from_shape(shape_keep);
-    auto dst_storage = Storage::allocate(numel_keep, dtype, Device::Cpu);
-
-    return dispatch_dtype(x.storage->dtype(), [&]<typename T_src>() {
-        return DispatchArithmetic::run(dtype, [&]<typename T_dst>() {
-            auto src_data = static_cast<const T_src*>(x.storage->data());
-            auto dst_data = static_cast<T_dst*>(dst_storage->data());
-            std::vector<py::ssize_t> loc_dst(ndim_dst);
-            for (py::ssize_t i = 0; i < numel_keep; ++i) {
-                // Sum over all src values to reduce
-                T_dst acc = static_cast<T_dst>(0);
-                std::vector<py::ssize_t> loc_src(n_axes);
-                py::ssize_t offset = x.offset;
-                for (py::ssize_t p = 0; p < ndim_dst; ++p) 
-                    offset += x.strides[axis_keep[p]] * loc_dst[p];
-                for (py::ssize_t j = 0; j < numel_drop; ++j) {
-                    py::ssize_t idx_src = offset;
-                    for (py::ssize_t p = 0; p < n_axes; ++p) 
-                        idx_src += x.strides[axis_drop[p]] * loc_src[p];
-                    acc += static_cast<T_dst>(src_data[idx_src]); 
-                    // Carry over src
-                    py::ssize_t k = n_axes - 1;
-                    while (k >= 0) { 
-                        loc_src[k] += 1;
-                        if (loc_src[k] < x.shape[axis_drop[k]]) break;
-                        loc_src[k] = 0;
-                        k -= 1;
-                    }
-                }
-                dst_data[i] = acc;
-                // Cary over dst
-                py::ssize_t k = ndim_dst - 1;
-                while (k >= 0) { 
-                    loc_dst[k] += 1;
-                    if (loc_dst[k] < x.shape[axis_keep[k]]) break;
-                    loc_dst[k] = 0;
-                    k -= 1;
-                }
-            }
-            return dst_storage;
-        });
-    });
-}
-
-
 std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     requires_cpu(x1, "_C._binary_op_generic");
     requires_cpu(x2, "_C._binary_op_generic");
@@ -432,7 +363,6 @@ void bind_ops_(py::module_& m) {
         "to", [](const Storage& s, Device d) { return s.to(d); }, 
         "Move a storage to another device.", py::arg("storage"), py::arg("device")
     );
-    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("dtype"));
     m.def("matmul", &matmul, "Matrix multiplication.", py::arg("x1"), py::arg("x2"));
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")

@@ -1,6 +1,153 @@
 #include "unary_ops.h"
 #include "cuda.cuh"
 
+// Sum
+
+std::shared_ptr<Storage> _cpu_sum(
+    const TensorView& input, 
+    Dtype out_dtype,
+    py::ssize_t n_axes,
+    py::ssize_t ndim_out,
+    const std::vector<py::ssize_t>& axis_keep,
+    const std::vector<py::ssize_t>& axis_drop, 
+    py::ssize_t numel_keep,
+    py::ssize_t numel_drop
+) {
+    auto out_storage = Storage::allocate(numel_keep, out_dtype, Device::Cpu);
+    return dispatch_dtype(input.storage->dtype(), [&]<typename T_in>() {
+        return DispatchArithmetic::run(out_dtype, [&]<typename T_out>() {
+            auto in_data = static_cast<const T_in*>(input.storage->data());
+            auto out_data = static_cast<T_out*>(out_storage->data());
+            std::vector<py::ssize_t> loc_out(ndim_out);
+            for (py::ssize_t i = 0; i < numel_keep; ++i) {
+                // Sum over all in values to reduce
+                T_out acc = static_cast<T_out>(0);
+                std::vector<py::ssize_t> loc_in(n_axes);
+                py::ssize_t offset = input.offset;
+                for (py::ssize_t p = 0; p < ndim_out; ++p) 
+                    offset += input.strides[axis_keep[p]] * loc_out[p];
+                for (py::ssize_t j = 0; j < numel_drop; ++j) {
+                    py::ssize_t idx_in = offset;
+                    for (py::ssize_t p = 0; p < n_axes; ++p) 
+                        idx_in += input.strides[axis_drop[p]] * loc_in[p];
+                    acc += static_cast<T_out>(in_data[idx_in]); 
+                    // Carry over in
+                    py::ssize_t k = n_axes - 1;
+                    while (k >= 0) { 
+                        loc_in[k] += 1;
+                        if (loc_in[k] < input.shape[axis_drop[k]]) break;
+                        loc_in[k] = 0;
+                        k -= 1;
+                    }
+                }
+                out_data[i] = acc;
+                // Cary over out
+                py::ssize_t k = ndim_out - 1;
+                while (k >= 0) { 
+                    loc_out[k] += 1;
+                    if (loc_out[k] < input.shape[axis_keep[k]]) break;
+                    loc_out[k] = 0;
+                    k -= 1;
+                }
+            }
+            return out_storage;
+        });
+    });
+}
+
+template <class T_in, class T_out>
+__global__ void _sum_kernel(
+    py::ssize_t nmax, 
+    const T_in* in_storage, 
+    T_out* out_storage, 
+    StridedView view_keep,
+    StridedView view_drop,
+    py::ssize_t numel_drop
+) {
+    auto i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= nmax) return;
+    py::ssize_t base = unravel(i, view_keep);
+    T_out acc = 0;
+    for (py::ssize_t j = 0; j < numel_drop; ++j)
+        acc += static_cast<T_out>(in_storage[base + unravel(j, view_drop)]);
+    out_storage[i] = acc;
+}
+
+std::shared_ptr<Storage> _cuda_sum(
+    const TensorView& input, 
+    Dtype out_dtype,
+    py::ssize_t n_axes,
+    py::ssize_t ndim_out,
+    const std::vector<py::ssize_t>& axis_keep,
+    const std::vector<py::ssize_t>& axis_drop, 
+    py::ssize_t numel_keep,
+    py::ssize_t numel_drop
+) {
+    auto view_keep = StridedView(axis_keep.size(), input.offset);
+    for (size_t p = 0; p < axis_keep.size(); ++p) {
+        view_keep.shape[p] = input.shape[axis_keep[p]];
+        view_keep.strides[p] = input.strides[axis_keep[p]];
+    }
+    auto view_drop = StridedView(axis_drop.size(), 0); // offset already counted in view_keep
+    for (size_t p = 0; p < axis_drop.size(); ++p) {
+        view_drop.shape[p] = input.shape[axis_drop[p]];
+        view_drop.strides[p] = input.strides[axis_drop[p]];
+    }
+    auto out = Storage::allocate(numel_keep, out_dtype, Device::Cuda);
+    dispatch_dtype(input.storage->dtype(), [&]<class T>() {
+        DispatchArithmetic::run(out_dtype, [&]<class O>() {
+            launch_1d(
+                numel_keep,
+                _sum_kernel<T, O>,
+                numel_keep,
+                static_cast<const T*>(input.storage->data()),
+                static_cast<O*>(out->data()),
+                view_keep,
+                view_drop,
+                numel_drop
+            );
+        });
+    });
+
+    return out;
+}
+
+std::shared_ptr<Storage> sum(
+    const TensorView& x, const std::vector<py::ssize_t>& axis_drop, Dtype dtype
+) {
+    // Compute both shapes
+    auto n_axes = static_cast<py::ssize_t>(axis_drop.size());
+    auto ndim_in = static_cast<py::ssize_t>(x.shape.size());
+    auto ndim_out = static_cast<py::ssize_t>(ndim_in - n_axes);
+    auto axis_keep = std::vector<py::ssize_t>(ndim_out);
+    auto shape_drop = std::vector<py::ssize_t>(n_axes);
+    auto shape_keep = std::vector<py::ssize_t>(ndim_out);
+    py::ssize_t posd = 0, posk = 0;
+    for (py::ssize_t p = 0; p < ndim_in; ++p)
+        if (std::find(axis_drop.begin(), axis_drop.end(), p) != axis_drop.end())
+            shape_drop[posd++] = x.shape[p];
+        else {
+            axis_keep[posk] = p;
+            shape_keep[posk] = x.shape[p];
+            posk++;
+        }
+    auto numel_drop = numel_from_shape(shape_drop);
+    auto numel_keep = numel_from_shape(shape_keep);
+
+    switch (x.storage->device()) {
+        case Device::Cpu: return _cpu_sum(
+            x, dtype, n_axes, ndim_out, axis_keep, axis_drop, numel_keep, numel_drop
+        );
+        case Device::Cuda: return _cuda_sum(
+            x, dtype, n_axes, ndim_out, axis_keep, axis_drop, numel_keep, numel_drop
+        );
+        default: NT_UNREACHABLE();
+    }
+    return {};
+}
+
+// Unary ops
+
 template <class Dispatch, class Op>
 std::shared_ptr<Storage> _cpu_unary_op_generic(const TensorView& x, Op op) {
     auto n_axes = static_cast<py::ssize_t>(x.shape.size());
@@ -40,13 +187,7 @@ __global__ void _unary_kernel(
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
-    auto idx = view.offset;
-    auto r = i;
-    for (int j = view.n_axes - 1; j >= 0; --j) {
-        auto coord = r % view.shape[j];
-        r /= view.shape[j];
-        idx += coord * view.strides[j];
-    }
+    auto idx = unravel(i, view);
     out[i] = op(in[idx]);
 }
 
@@ -130,6 +271,7 @@ std::shared_ptr<Storage> relu(const TensorView& x) {
 }
 
 void bind_unary_ops_(py::module& m) {
+    m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"), py::arg("axis"), py::arg("dtype"));
     m.def("exp", [](const TensorView& x) { return exp(x); }, "Component-wise exponentiation.", py::arg("x"));
     m.def("log", [](const TensorView& x) { return log(x); }, "Component-wise log.", py::arg("x"));
     m.def("pow", [](const TensorView& x, Scalar a) { return pow(x, a); }, "Component-wise power.", py::arg("x"), py::arg("a"));

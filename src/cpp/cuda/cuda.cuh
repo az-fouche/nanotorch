@@ -21,3 +21,12 @@ struct StridedView {
     py::ssize_t shape[NT_MAX_DIMS];
     py::ssize_t strides[NT_MAX_DIMS];
 };
+__device__ inline py::ssize_t unravel(py::ssize_t i, StridedView view) {
+    py::ssize_t idx = view.offset;
+    for (int j = view.n_axes - 1; j >= 0; --j) {
+        auto coord = i % view.shape[j];
+        i /= view.shape[j];
+        idx += coord * view.strides[j];
+    }
+    return idx;
+}

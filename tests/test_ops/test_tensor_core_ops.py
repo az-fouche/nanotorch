@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from conftest import requires_cuda
 
 import nanotorch as nt
 
@@ -23,24 +24,23 @@ def test_tolist_extensive():
 
 # Sum
 
+SUM_BASIS_SPEC = [
+    (([],), 0.0),
+    ((2.0,), 2.0),
+    (([1.0, 2.0, 3.0],), 6.0),
+    (([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],), 21.0),
+    (([[[1, 2], [3, 4]], [[5, 6], [7, 8]]],), 36.0),
+    (([1.0, 2.0, -3.0],), 0.0),
+    (([-1.0, -2.0, -3.0],), -6.0),
+    (([True, True, False, True],), 3),
+    (([1, 7, 0, 8], nt.int32), 16),
+    (([1, 7, 0, 8], nt.int64), 16),
+    (([1.5, 7.5, -1.5, 8.0], nt.float32), 15.5),
+    (([1.5, 7.5, -1.5, 8.0], nt.float64), 15.5),
+]
 
-@pytest.mark.parametrize(
-    "input,expected",
-    [
-        (([],), 0.0),
-        ((2.0,), 2.0),
-        (([1.0, 2.0, 3.0],), 6.0),
-        (([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],), 21.0),
-        (([[[1, 2], [3, 4]], [[5, 6], [7, 8]]],), 36.0),
-        (([1.0, 2.0, -3.0],), 0.0),
-        (([-1.0, -2.0, -3.0],), -6.0),
-        (([True, True, False, True],), 3),
-        (([1, 7, 0, 8], nt.int32), 16),
-        (([1, 7, 0, 8], nt.int64), 16),
-        (([1.5, 7.5, -1.5, 8.0], nt.float32), 15.5),
-        (([1.5, 7.5, -1.5, 8.0], nt.float64), 15.5),
-    ],
-)
+
+@pytest.mark.parametrize("input,expected", SUM_BASIS_SPEC)
 def test_tensor_sum(input, expected):
     if len(input) == 2:
         input, dtype = input
@@ -66,48 +66,74 @@ def test_tensor_sum_2d_intindex_slice():
     assert x[1].sum().tolist() == 15
 
 
+@requires_cuda
+@pytest.mark.parametrize("input,expected", SUM_BASIS_SPEC)
+def test_tensor_sum_cuda(input, expected):
+    if len(input) == 2:
+        input, dtype = input
+        x = nt.tensor(input, dtype=dtype)
+    else:
+        x = nt.tensor(*input)
+    result = x.to("cuda").sum()
+    assert result.device == nt.Device.Cuda
+    assert result.cpu().tolist() == expected
+
+
 # Sum with axis / keepdim
+
+SUM_AXIS_KEEPDIM_SPEC = [
+    # 1D, axis=0
+    ([1.0, 2.0, 3.0], 0, False, (), 6.0),
+    ([1.0, 2.0, 3.0], 0, True, (1,), [6.0]),
+    ([1.0, 2.0, 3.0], (0,), False, (), 6.0),
+    # 1D, axis=None (full reduce)
+    ([1.0, 2.0, 3.0], None, False, (), 6.0),
+    ([1.0, 2.0, 3.0], None, True, (1,), [6.0]),
+    # 2D, axis=0
+    ([[1, 2, 3], [4, 5, 6]], 0, False, (3,), [5, 7, 9]),
+    ([[1, 2, 3], [4, 5, 6]], 0, True, (1, 3), [[5, 7, 9]]),
+    # 2D, axis=1
+    ([[1, 2, 3], [4, 5, 6]], 1, False, (2,), [6, 15]),
+    ([[1, 2, 3], [4, 5, 6]], 1, True, (2, 1), [[6], [15]]),
+    # 2D, negative axis
+    ([[1, 2, 3], [4, 5, 6]], -1, False, (2,), [6, 15]),
+    ([[1, 2, 3], [4, 5, 6]], -2, False, (3,), [5, 7, 9]),
+    # 2D, axis=None
+    ([[1, 2, 3], [4, 5, 6]], None, False, (), 21.0),
+    ([[1, 2, 3], [4, 5, 6]], None, True, (1, 1), [[21.0]]),
+    # 2D, multi-axis (full)
+    ([[1, 2, 3], [4, 5, 6]], (0, 1), False, (), 21.0),
+    ([[1, 2, 3], [4, 5, 6]], (0, 1), True, (1, 1), [[21.0]]),
+    # 3D
+    ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 0, False, (2, 2), [[6, 8], [10, 12]]),
+    ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 1, False, (2, 2), [[4, 6], [12, 14]]),
+    ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 2, False, (2, 2), [[3, 7], [11, 15]]),
+    ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], (0, 2), False, (2,), [14, 22]),
+    ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], (0, 2), True, (1, 2, 1), [[[14], [22]]]),
+    ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], None, False, (), 36.0),
+]
 
 
 @pytest.mark.parametrize(
-    "input,axis,keepdim,expected_shape,expected",
-    [
-        # 1D, axis=0
-        ([1.0, 2.0, 3.0], 0, False, (), 6.0),
-        ([1.0, 2.0, 3.0], 0, True, (1,), [6.0]),
-        ([1.0, 2.0, 3.0], (0,), False, (), 6.0),
-        # 1D, axis=None (full reduce)
-        ([1.0, 2.0, 3.0], None, False, (), 6.0),
-        ([1.0, 2.0, 3.0], None, True, (1,), [6.0]),
-        # 2D, axis=0
-        ([[1, 2, 3], [4, 5, 6]], 0, False, (3,), [5, 7, 9]),
-        ([[1, 2, 3], [4, 5, 6]], 0, True, (1, 3), [[5, 7, 9]]),
-        # 2D, axis=1
-        ([[1, 2, 3], [4, 5, 6]], 1, False, (2,), [6, 15]),
-        ([[1, 2, 3], [4, 5, 6]], 1, True, (2, 1), [[6], [15]]),
-        # 2D, negative axis
-        ([[1, 2, 3], [4, 5, 6]], -1, False, (2,), [6, 15]),
-        ([[1, 2, 3], [4, 5, 6]], -2, False, (3,), [5, 7, 9]),
-        # 2D, axis=None
-        ([[1, 2, 3], [4, 5, 6]], None, False, (), 21.0),
-        ([[1, 2, 3], [4, 5, 6]], None, True, (1, 1), [[21.0]]),
-        # 2D, multi-axis (full)
-        ([[1, 2, 3], [4, 5, 6]], (0, 1), False, (), 21.0),
-        ([[1, 2, 3], [4, 5, 6]], (0, 1), True, (1, 1), [[21.0]]),
-        # 3D
-        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 0, False, (2, 2), [[6, 8], [10, 12]]),
-        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 1, False, (2, 2), [[4, 6], [12, 14]]),
-        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], 2, False, (2, 2), [[3, 7], [11, 15]]),
-        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], (0, 2), False, (2,), [14, 22]),
-        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], (0, 2), True, (1, 2, 1), [[[14], [22]]]),
-        ([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], None, False, (), 36.0),
-    ],
+    "input,axis,keepdim,expected_shape,expected", SUM_AXIS_KEEPDIM_SPEC
 )
 def test_tensor_sum_axis(input, axis, keepdim, expected_shape, expected):
     x = nt.tensor(input)
     out = x.sum(axis=axis, keepdim=keepdim)
     assert out.shape == expected_shape
     assert out.tolist() == expected
+
+
+@requires_cuda
+@pytest.mark.parametrize(
+    "input,axis,keepdim,expected_shape,expected", SUM_AXIS_KEEPDIM_SPEC
+)
+def test_tensor_sum_axis_cuda(input, axis, keepdim, expected_shape, expected):
+    x = nt.tensor(input)
+    out = x.to("cuda").sum(axis=axis, keepdim=keepdim)
+    assert out.device == nt.Device.Cuda
+    assert out.shape == expected_shape
+    assert out.cpu().tolist() == expected
 
 
 # Sum on views
@@ -134,23 +160,55 @@ def test_tensor_sum_axis_fancy_indexed():
     assert picked.sum(axis=1).tolist() == [6, 24]
 
 
+@requires_cuda
+def test_tensor_sum_axis_transposed_cuda():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6]]).to("cuda")
+    assert x.T.sum(axis=0).cpu().tolist() == x.sum(axis=1).cpu().tolist()
+    assert x.T.sum(axis=1).cpu().tolist() == x.sum(axis=0).cpu().tolist()
+
+
+@requires_cuda
+def test_tensor_sum_axis_sliced_view_cuda():
+    x = nt.tensor([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]])
+    v = x[:, ::2].to("cuda")
+    assert v.cpu().tolist() == [[1, 3], [5, 7], [9, 11]]
+    assert v.sum(axis=0).cpu().tolist() == [15, 21]
+    assert v.sum(axis=1).cpu().tolist() == [4, 12, 20]
+
+
+@requires_cuda
+def test_tensor_sum_axis_fancy_indexed_cuda():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    picked = x[[0, 2]].to("cuda")
+    assert picked.sum(axis=0).cpu().tolist() == [8, 10, 12]
+    assert picked.sum(axis=1).cpu().tolist() == [6, 24]
+
+
 # Sum across dtypes (values only)
 
+SUM_DTYPE_SPEC = [
+    ([[True, False], [True, True]], nt.bool_, 0, [2, 1]),
+    ([[True, False], [True, True]], nt.bool_, 1, [1, 2]),
+    ([[1, 2], [3, 4]], nt.int32, 0, [4, 6]),
+    ([[1, 2], [3, 4]], nt.int64, 1, [3, 7]),
+    ([[1.5, 2.5], [3.0, 4.0]], nt.float32, 0, [4.5, 6.5]),
+    ([[1.5, 2.5], [3.0, 4.0]], nt.float64, 1, [4.0, 7.0]),
+]
 
-@pytest.mark.parametrize(
-    "input,dtype,axis,expected",
-    [
-        ([[True, False], [True, True]], nt.bool_, 0, [2, 1]),
-        ([[True, False], [True, True]], nt.bool_, 1, [1, 2]),
-        ([[1, 2], [3, 4]], nt.int32, 0, [4, 6]),
-        ([[1, 2], [3, 4]], nt.int64, 1, [3, 7]),
-        ([[1.5, 2.5], [3.0, 4.0]], nt.float32, 0, [4.5, 6.5]),
-        ([[1.5, 2.5], [3.0, 4.0]], nt.float64, 1, [4.0, 7.0]),
-    ],
-)
+
+@pytest.mark.parametrize("input,dtype,axis,expected", SUM_DTYPE_SPEC)
 def test_tensor_sum_axis_dtypes(input, dtype, axis, expected):
     x = nt.tensor(input, dtype=dtype)
     assert x.sum(axis=axis).tolist() == expected
+
+
+@requires_cuda
+@pytest.mark.parametrize("input,dtype,axis,expected", SUM_DTYPE_SPEC)
+def test_tensor_sum_axis_dtypes_cuda(input, dtype, axis, expected):
+    x = nt.tensor(input, dtype=dtype)
+    out = x.to("cuda").sum(axis=axis)
+    assert out.device == nt.Device.Cuda
+    assert out.cpu().tolist() == expected
 
 
 # Sum dtype contract (torch auto-promote: bool/int -> int64, float unchanged)
