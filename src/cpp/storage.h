@@ -10,7 +10,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "cuda/cuda.h"
+#include "ops/cuda.h"
 #include "dtype.h"
 
 #if defined(_MSC_VER) && !defined(__clang__)

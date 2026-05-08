@@ -64,6 +64,7 @@ __global__ void _sum_kernel(
     StridedView view_drop,
     py::ssize_t numel_drop
 ) {
+    // TODO: optimize the parallelization
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= nmax) return;
     py::ssize_t base = unravel(i, view_keep);

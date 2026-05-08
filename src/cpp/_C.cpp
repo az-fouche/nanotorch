@@ -1,10 +1,11 @@
 #include "storage.h"
 #include "tensor_view.h"
 #include "factory.h"
-#include "ops.h"
-#include "cuda/cuda.h"
-#include "cuda/unary_ops.h"
-#include "cuda/binary_ops.h"
+#include "ops/ops.h"
+#include "ops/cuda.h"
+#include "ops/unary_ops.h"
+#include "ops/binary_ops.h"
+#include "ops/inplace_ops.h"
 
 PYBIND11_MODULE(_C, m) {
     m.doc() = "nanotorch C++ core module.";
@@ -13,6 +14,7 @@ PYBIND11_MODULE(_C, m) {
     bind_factory_(m);
     bind_ops_(m);
     bind_cuda_(m);
-    bind_unary_ops_(m);
     bind_binary_ops_(m);
+    bind_inplace_ops_(m);
+    bind_unary_ops_(m);
 }

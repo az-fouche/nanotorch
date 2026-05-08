@@ -117,93 +117,6 @@ bool equals(const TensorView& x1, const TensorView& x2) {
     });
 }
 
-// Inplace
-
-template<typename Dispatch, typename F>
-void _inplace_apply(TensorView& out, const TensorView& other, F&& func) {
-    requires_cpu(out, "_C._inplace_apply");
-    requires_cpu(other, "_C._inplace_apply");
-
-    if (out.shape != other.shape) {
-        throw std::invalid_argument("_inplace_apply: Shape mismatch.");
-    }
-    auto n_axes = static_cast<py::ssize_t>(out.shape.size());
-    auto numel = numel_from_shape(out.shape);
-    Dispatch::run(out.storage->dtype(), [&]<typename T>() {
-        auto* data_other = static_cast<const T*>(other.storage->data());
-        auto* data_out = static_cast<T*>(out.storage->data());
-        std::vector<py::ssize_t> loc(n_axes);
-        for (py::ssize_t i = 0; i < numel; ++i) {
-
-            py::ssize_t idx_out = out.offset;
-            py::ssize_t idx_other = other.offset;
-            for (py::ssize_t j = 0; j < n_axes; ++j) {
-                idx_out += out.strides[j] * loc[j];
-                idx_other += other.strides[j] * loc[j];
-            }
-            data_out[idx_out] = func(data_out[idx_out], data_other[idx_other]);
-
-            // Loc update
-            py::ssize_t j = n_axes - 1;
-            while (j >= 0) { 
-                loc[j] += 1;
-                if (loc[j] < out.shape[j]) break;
-                loc[j] = 0;
-                j -= 1;
-            }
-        }
-    });
-    out.storage->bump_version();
-}
-
-void add_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return a + b; });
-}
-void sub_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return a - b; });
-}
-void mul_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return a * b; });
-}
-void div_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply<DispatchArithmetic>(out, other, []<typename T>(T a, T b) { return a / b; });
-}
-void copy_inplace(TensorView& out, const TensorView& other) {
-    _inplace_apply<DispatchAll>(out, other, []<typename T>(T a, T b) { return b; });
-}
-
-
-void copy_view(const TensorView& src, const TensorView& dst) {
-    requires_cpu(src, "_C.copy_view");
-    requires_cpu(dst, "_C.copy_view");
-
-    auto src_storage = src.storage;
-    auto dst_storage = dst.storage;
-    auto n_axes = static_cast<py::ssize_t>(src.shape.size());
-    auto numel = numel_from_shape(src.shape);
-    dispatch_dtype(dst_storage->dtype(), [&]<typename T>() {
-        auto* ptr_src = static_cast<const T*>(src_storage->data());
-        auto* ptr_dst = static_cast<T*>(dst_storage->data());
-        std::vector<py::ssize_t> loc(n_axes);
-        for (py::ssize_t i = 0; i < numel; ++i) {
-            py::ssize_t idx_src = src.offset, idx_dst = dst.offset;
-            for (py::ssize_t j = 0; j < n_axes; ++j) {
-                idx_src += src.strides[j] * loc[j];
-                idx_dst += dst.strides[j] * loc[j];
-            }
-            ptr_dst[idx_dst] = ptr_src[idx_src];
-
-            py::ssize_t j = n_axes - 1;
-            while (j >= 0) { 
-                loc[j] += 1;
-                if (loc[j] < src.shape[j]) break;
-                loc[j] = 0;
-                j -= 1;
-            }
-        }
-    });
-}
-
 void scatter_to_axes(
     const TensorView& src, 
     const TensorView& dst,
@@ -354,6 +267,37 @@ std::shared_ptr<Storage> gather_from_axes(
     });
 }
 
+void copy_view(const TensorView& src, const TensorView& dst) {
+    requires_cpu(src, "_C.copy_view");
+    requires_cpu(dst, "_C.copy_view");
+
+    auto src_storage = src.storage;
+    auto dst_storage = dst.storage;
+    auto n_axes = static_cast<py::ssize_t>(src.shape.size());
+    auto numel = numel_from_shape(src.shape);
+    dispatch_dtype(dst_storage->dtype(), [&]<typename T>() {
+        auto* ptr_src = static_cast<const T*>(src_storage->data());
+        auto* ptr_dst = static_cast<T*>(dst_storage->data());
+        std::vector<py::ssize_t> loc(n_axes);
+        for (py::ssize_t i = 0; i < numel; ++i) {
+            py::ssize_t idx_src = src.offset, idx_dst = dst.offset;
+            for (py::ssize_t j = 0; j < n_axes; ++j) {
+                idx_src += src.strides[j] * loc[j];
+                idx_dst += dst.strides[j] * loc[j];
+            }
+            ptr_dst[idx_dst] = ptr_src[idx_src];
+
+            py::ssize_t j = n_axes - 1;
+            while (j >= 0) { 
+                loc[j] += 1;
+                if (loc[j] < src.shape[j]) break;
+                loc[j] = 0;
+                j -= 1;
+            }
+        }
+    });
+}
+
 void bind_ops_(py::module_& m) {
     m.def(
         "cast", [](const Storage& s, Dtype t) { return s.cast(t); }, 
@@ -367,11 +311,6 @@ void bind_ops_(py::module_& m) {
     m.def(
         "equals", &equals, "Test the per-coef equality of two tensors.", py::arg("x1"), py::arg("x2")
     );
-    m.def("add_inplace", &add_inplace, "A dd elements inplace.", py::arg("x1"), py::arg("x2"));
-    m.def("sub_inplace", &sub_inplace, "Subtract elements inplace.", py::arg("x1"), py::arg("x2"));
-    m.def("mul_inplace", &mul_inplace, "Multiply elements inplace.", py::arg("x1"), py::arg("x2"));
-    m.def("div_inplace", &div_inplace, "Divide elements inplace.", py::arg("x1"), py::arg("x2"));
-    m.def("copy_inplace", &copy_inplace, "Copy elements inplace.", py::arg("x1"), py::arg("x2"));
     m.def(
         "copy_view", &copy_view, "Copy source view into target view.", py::arg("src"), py::arg("dst")
     );

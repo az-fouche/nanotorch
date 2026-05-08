@@ -611,7 +611,14 @@ class Tensor:
         """Returns a contiguous version of the tensor (copy if necessary)."""
         if not force and self._is_contiguous():
             return self
-        return Tensor(self.tolist(), dtype=self.dtype)
+        # FIXME: avoid the round trip
+        if self.device == Device.Cuda:
+            data = Tensor._new_view(
+                _C.to(self._storage, Device.Cpu), self.shape, *self.strides
+            ).tolist()
+        else:
+            data = self.tolist()
+        return Tensor(data, dtype=self.dtype, device=self.device)
 
     @property
     def _C_view(self) -> _C.TensorView:

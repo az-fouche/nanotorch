@@ -6,17 +6,7 @@
 
 namespace py = pybind11;
 
-// Common ops
 bool equals(const TensorView& x1, const TensorView& x2);
-
-// Inplace
-void add_inplace(TensorView& out, const TensorView& other);
-void sub_inplace(TensorView& out, const TensorView& other);
-void mul_inplace(TensorView& out, const TensorView& other);
-void div_inplace(TensorView& out, const TensorView& other);
-void copy_inplace(TensorView& out, const TensorView& other);
-
-// Special
 void copy_view(const TensorView& src, const TensorView& dst);
 void scatter_to_axes(
     const TensorView& src, 
