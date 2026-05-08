@@ -12,6 +12,7 @@ from .autograd import (
     MulOp,
     NegOp,
     PowOp,
+    ReshapeOp,
     SubOp,
     SumOp,
     TrueDivOp,
@@ -152,5 +153,6 @@ Tensor.sum = lambda self, axis=None, keepdim=False, dtype=None: SumOp.apply(
 Tensor.mean = lambda self, axis=None, keepdim=False, dtype=None: MeanOp.apply(
     self, axis, keepdim, dtype
 )
+Tensor.reshape = lambda self, *dims: ReshapeOp.apply(self, *dims)
 
 Tensor.__hash__ = None  # Necessary for __eq__ semantics

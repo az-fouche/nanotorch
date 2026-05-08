@@ -370,6 +370,40 @@ class MeanOp(Function):
         return (grad_out.expand(self._orig_shape) / self._denom,)
 
 
+class ReshapeOp(Function):
+    """Returns a reshaped view of the tensor (does not copy).
+
+    Parameters
+    ----------
+    x: Tensor
+        Tensor to reshape.
+    dims: *int
+        New shape dimensions, prod(dims) should equal tensor's number of
+        elements, otherwise reshape raises a ValueError.
+
+    Returns
+    -------
+    Tensor
+        Reshaped tensor view.
+    """
+
+    def forward(self, x: Tensor, *dims: int):
+        if math.prod(dims) != x.numel:
+            raise ValueError(f"Can't reshape {x.shape} into {dims}.")
+        if len(dims) == 0:
+            raise ValueError("No dimensions provided.")
+        self._shape = x.shape
+        if dims == x.shape:
+            return x
+        x = x._to_contiguous()
+        return Tensor._new_view(
+            x.storage, shape=tuple(dims), strides=None, offset=x._offset
+        )
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        return (grad_out.reshape(*self._shape),)
+
+
 class TransposeOp(Function):
     """y = x.T operation."""
 

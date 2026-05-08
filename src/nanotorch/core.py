@@ -336,32 +336,7 @@ class Tensor:
             return Tensor._new_contiguous(self.storage.clone(), self.shape)
         return self._to_contiguous(force=True)
 
-    def reshape(self, *dims: int) -> Tensor:
-        """Returns a reshaped view of the tensor (does not copy).
-
-        Parameters
-        ----------
-        x: Tensor
-            Tensor to reshape.
-        dims: *int
-            New shape dimensions, prod(dims) should equal tensor's number of
-            elements, otherwise reshape raises a ValueError.
-
-        Returns
-        -------
-        Tensor
-            Reshaped tensor view.
-        """
-        if math.prod(dims) != self.numel:
-            raise ValueError(f"Can't reshape {self.shape} into {dims}.")
-        if len(dims) == 0:
-            raise ValueError("No dimensions provided.")
-        if dims == self.shape:
-            return self
-        this = self._to_contiguous()
-        return Tensor._new_view(
-            this.storage, shape=tuple(dims), strides=None, offset=this._offset
-        )
+    def reshape(self, *dims: int) -> Tensor: ...
 
     def transpose(self, dim0: int, dim1: int) -> Tensor:
         """Permutes two tensor dimensions (does not copy).

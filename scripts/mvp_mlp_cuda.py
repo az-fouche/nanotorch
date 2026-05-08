@@ -1,15 +1,15 @@
-"""Second project objective: CUDA support."""
+"""End-to-end MLP fitting with CUDA support."""
 
 import time
 
 import nanotorch as nt
 import nanotorch.nn as nn
 
-N_SAMPLES = 50_000
+N_SAMPLES = 100_000
 N_FEATURES = 8
 HIDDEN_SIZE = 256
-N_EPOCH = 20
-BATCH_SIZE = 256
+N_EPOCH = 50
+BATCH_SIZE = 1024
 LR = 1e-4
 
 device = "cpu"  # "cuda" if nt.is_cuda_available() else "cpu"
@@ -34,7 +34,7 @@ def main():
         for i in range(0, N_SAMPLES, BATCH_SIZE):
             xb, yb_true = (X[i : i + BATCH_SIZE], y[i : i + BATCH_SIZE])
             yb_pred = model(xb)
-            loss = nt.mean((yb_pred - yb_true) ** 2)
+            loss = nt.mean((yb_pred.squeeze() - yb_true) ** 2)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
