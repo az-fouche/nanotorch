@@ -216,7 +216,7 @@ class Tensor:
                 value = value._to_contiguous()
             _C.copy_view(
                 src=value._C_view,
-                dst=_C.TensorView(
+                out=_C.TensorView(
                     self.storage, view.shape, view._strides, view._offset
                 ),
             )
@@ -232,7 +232,7 @@ class Tensor:
 
         _C.scatter_to_axes(
             src=value._C_view,
-            dst=self._C_view,
+            out=self._C_view,
             fancy_dims_in_src=fax.fancy_dims_in_src,
             fancy_dims_data=[t._C_view for t in fax.fancy_dims_data],
             out_axis_is_fancy=fax.out_axis_is_fancy,
@@ -301,17 +301,19 @@ class Tensor:
             Nanotorch data type to cast the tensor to.
         """
         this = self
-        if not this._is_contiguous(full_span=True):
-            this = this._to_contiguous(force=True)
         if isinstance(target, Dtype):
             device = self.device
             if target == self.dtype:
                 return self
+            if not this._is_contiguous(full_span=True):
+                this = this._to_contiguous(force=True)
             new_buffer = _C.cast(this._storage, target)
         else:
             device = get_std_device(target)
             if device == self.device:
                 return self
+            if not this._is_contiguous(full_span=True):
+                this = this._to_contiguous(force=True)
             new_buffer = _C.to(this._storage, device)
         out = Tensor._new_view(new_buffer, this.shape, this._strides, this._offset)
         if self.requires_grad and self.grad_fn is None:
@@ -614,14 +616,9 @@ class Tensor:
         """Returns a contiguous version of the tensor (copy if necessary)."""
         if not force and self._is_contiguous():
             return self
-        # FIXME: avoid the round trip
-        if self.device == Device.Cuda:
-            data = Tensor._new_view(
-                _C.to(self._storage, Device.Cpu), self.shape, *self.strides
-            ).tolist()
-        else:
-            data = self.tolist()
-        return Tensor(data, dtype=self.dtype, device=self.device)
+        return Tensor._new_contiguous(
+            _C.clone_contiguous_view_from(self._C_view), self.shape
+        )
 
     @property
     def _C_view(self) -> _C.TensorView:

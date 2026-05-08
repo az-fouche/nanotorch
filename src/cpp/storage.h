@@ -131,4 +131,26 @@ template <> struct type_caster<Scalar> {
 
 }} // namespace pybind11::detail
 
+// Helpers
+
+inline void _require_same_device(
+    const std::shared_ptr<Storage> s1, 
+    const std::shared_ptr<Storage> s2, 
+    const char* fname
+) {
+    if (s1->device() != s2->device()) throw std::runtime_error(
+        std::string(fname) + ": Expected two storages on the same device."
+    );
+}
+
+inline void _require_same_dtype(
+    const std::shared_ptr<Storage> s1, 
+    const std::shared_ptr<Storage> s2, 
+    const char* fname
+) {
+    if (s1->dtype() != s2->dtype()) throw std::runtime_error(
+        std::string(fname) + ": Expected two storages on the same dtype."
+    );
+}
+
 void bind_storage_(py::module_& m);

@@ -7,9 +7,9 @@ import nanotorch.nn as nn
 
 N_SAMPLES = 50_000
 N_FEATURES = 8
-HIDDEN_SIZE = 16
+HIDDEN_SIZE = 256
 N_EPOCH = 20
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 LR = 1e-4
 
 device = "cpu"  # "cuda" if nt.is_cuda_available() else "cpu"

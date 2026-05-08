@@ -27,3 +27,13 @@ inline void bind_tensor_view_(py::module_& m) {
         .def_readwrite("strides", &TensorView::strides)
         .def_readwrite("offset", &TensorView::offset);
 }
+
+inline void _require_same_shape(
+    const TensorView& x1, 
+    const TensorView& x2, 
+    const char* fname
+) {
+    if (x1.shape != x2.shape) throw std::runtime_error(
+        std::string(fname) + ": Expected two views of the same shape."
+    );
+}

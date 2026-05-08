@@ -24,10 +24,10 @@ pybind11_add_module(_C MODULE
     src/cpp/storage.cpp
     src/cpp/factory.cpp
     src/cpp/ops/cuda.cpp
-    src/cpp/ops/ops.cpp
     src/cpp/ops/binary_ops.cu
     src/cpp/ops/inplace_ops.cu
     src/cpp/ops/matmul.cu
+    src/cpp/ops/ops.cu
     src/cpp/ops/unary_ops.cu
 )
 target_include_directories(_C PRIVATE src/cpp)
