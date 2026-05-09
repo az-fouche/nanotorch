@@ -4,45 +4,21 @@
 // Ops
 
 bool equals(const TensorView &x1, const TensorView &x2) {
-  requires_cpu(x1, "_C.equals");
-  requires_cpu(x2, "_C.equals");
-
-  auto s1 = x1.storage;
-  auto s2 = x2.storage;
-  if (s1->dtype() != s2->dtype())
-    throw std::invalid_argument("equals: expected homogeneous tensors, got " +
-                                dtype_to_format(s1->dtype()) + " and " +
-                                dtype_to_format(s2->dtype()) + ".");
-  if (x1.shape != x2.shape)
-    throw std::invalid_argument("equals: expected same size tensors, got " +
-                                vec_to_string(x1.shape) + " and " +
-                                vec_to_string(x2.shape) + ".");
-
+  _require_cpu(x1, "_C.equals");
+  _require_cpu(x2, "_C.equals");
+  _require_same_shape(x1, x2, "equals");
+  _require_same_dtype(x1.storage, x2.storage, "equals");
+  _require_same_device(x1.storage, x2.storage, "equals");
   auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
   auto numel = numel_from_shape(x1.shape);
-  return DispatchAll::run(s1->dtype(), [&]<typename T>() {
-    auto *ptr_in1 = static_cast<const T *>(s1->data());
-    auto *ptr_in2 = static_cast<const T *>(s2->data());
-    std::vector<py::ssize_t> loc(n_axes);
+  return DispatchAll::run(x1.storage->dtype(), [&]<typename T>() {
+    auto *ptr_in1 = static_cast<const T *>(x1.storage->data());
+    auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
     for (py::ssize_t i = 0; i < numel; ++i) {
-      // Current loc eq check
-      py::ssize_t idx1 = x1.offset, idx2 = x2.offset;
-      for (py::ssize_t j = 0; j < n_axes; ++j) {
-        idx1 += x1.strides[j] * loc[j];
-        idx2 += x2.strides[j] * loc[j];
-      }
+      auto idx1 = unravel(i, x1);
+      auto idx2 = unravel(i, x2);
       if (ptr_in1[idx1] != ptr_in2[idx2])
         return false;
-
-      // Loc update
-      py::ssize_t j = n_axes - 1;
-      while (j >= 0) {
-        loc[j] += 1;
-        if (loc[j] < x1.shape[j])
-          break;
-        loc[j] = 0;
-        j -= 1;
-      }
     }
     return true;
   });
@@ -53,8 +29,8 @@ void scatter_to_axes(const TensorView &src, const TensorView &out,
                      const std::vector<TensorView> &fancy_dims_data,
                      const std::vector<bool> &out_axis_is_fancy,
                      const std::vector<py::ssize_t> &out_axis_target) {
-  requires_cpu(src, "_C.scatter_to_axes");
-  requires_cpu(out, "_C.scatter_to_axes");
+  _require_cpu(src, "_C.scatter_to_axes");
+  _require_cpu(out, "_C.scatter_to_axes");
 
   // TODO(#15) (optim): optimize with chunk memcopy
   py::ssize_t out_ndim = out.shape.size();
@@ -133,7 +109,7 @@ gather_from_axes(const TensorView &x, const std::vector<py::ssize_t> &new_shape,
                  const std::vector<TensorView> &fancy_dims_data,
                  const std::vector<bool> &out_axis_is_fancy,
                  const std::vector<py::ssize_t> &out_axis_target) {
-  requires_cpu(x, "_C.gather_from_axes");
+  _require_cpu(x, "_C.gather_from_axes");
 
   // TODO(#15) (optim): optimize with chunk memcopy
   py::ssize_t src_ndim = x.shape.size();
@@ -224,26 +200,8 @@ void _cuda_copy_view(const T *ptr_in, T *ptr_out, const TensorView &view_in,
 template <class T>
 void _cpu_copy_view(const T *ptr_in, T *ptr_out, const TensorView &view_in,
                     const TensorView &view_out) {
-  auto n_axes = static_cast<py::ssize_t>(view_in.shape.size());
-  auto numel = numel_from_shape(view_in.shape);
-  std::vector<py::ssize_t> loc(n_axes);
-  for (py::ssize_t i = 0; i < numel; ++i) {
-    py::ssize_t idx_src = view_in.offset, idx_out = view_out.offset;
-    for (py::ssize_t j = 0; j < n_axes; ++j) {
-      idx_src += view_in.strides[j] * loc[j];
-      idx_out += view_out.strides[j] * loc[j];
-    }
-    ptr_out[idx_out] = ptr_in[idx_src];
-
-    py::ssize_t j = n_axes - 1;
-    while (j >= 0) {
-      loc[j] += 1;
-      if (loc[j] < view_in.shape[j])
-        break;
-      loc[j] = 0;
-      j -= 1;
-    }
-  }
+  for (py::ssize_t i = 0; i < numel_from_shape(view_in.shape); ++i)
+    ptr_out[unravel(i, view_out)] = ptr_in[unravel(i, view_in)];
 }
 
 void copy_view(const TensorView &src, const TensorView &out) {

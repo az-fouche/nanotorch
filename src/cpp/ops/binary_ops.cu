@@ -11,24 +11,10 @@ std::shared_ptr<Storage> _cpu_binary_op_generic(const TensorView &x1,
   auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
   auto storage_out = Storage::allocate(numel, out_dtype, x1.storage->device());
   auto *ptr_out = static_cast<O *>(storage_out->data());
-  std::vector<py::ssize_t> loc(n_axes);
   for (py::ssize_t i = 0; i < numel; ++i) {
-    py::ssize_t idx1 = x1.offset, idx2 = x2.offset;
-    for (py::ssize_t j = 0; j < n_axes; ++j) {
-      idx1 += x1.strides[j] * loc[j];
-      idx2 += x2.strides[j] * loc[j];
-    }
+    auto idx1 = unravel(i, x1);
+    auto idx2 = unravel(i, x2);
     ptr_out[i] = static_cast<O>(func(ptr_in1[idx1], ptr_in2[idx2]));
-
-    // Loc update
-    py::ssize_t j = n_axes - 1;
-    while (j >= 0) {
-      loc[j] += 1;
-      if (loc[j] < x1.shape[j])
-        break;
-      loc[j] = 0;
-      j -= 1;
-    }
   }
   return storage_out;
 }

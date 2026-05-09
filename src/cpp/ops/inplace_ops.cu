@@ -9,26 +9,10 @@ void _cpu_inplace_apply(TensorView &out, const TensorView &other, Op op) {
   auto numel = numel_from_shape(out.shape);
   auto *ptr_other = static_cast<const T *>(other.storage->data());
   auto *ptr_out = static_cast<T *>(out.storage->data());
-  std::vector<py::ssize_t> loc(n_axes);
   for (py::ssize_t i = 0; i < numel; ++i) {
-
-    py::ssize_t idx_out = out.offset;
-    py::ssize_t idx_other = other.offset;
-    for (py::ssize_t j = 0; j < n_axes; ++j) {
-      idx_out += out.strides[j] * loc[j];
-      idx_other += other.strides[j] * loc[j];
-    }
+    py::ssize_t idx_out = unravel(i, out);
+    py::ssize_t idx_other = unravel(i, other);
     ptr_out[idx_out] = op(ptr_out[idx_out], ptr_other[idx_other]);
-
-    // Loc update
-    py::ssize_t j = n_axes - 1;
-    while (j >= 0) {
-      loc[j] += 1;
-      if (loc[j] < out.shape[j])
-        break;
-      loc[j] = 0;
-      j -= 1;
-    }
   }
 }
 

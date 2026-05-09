@@ -30,7 +30,7 @@ inline py::ssize_t numel_from_shape(const std::vector<py::ssize_t> &shape) {
   return numel;
 }
 
-inline void requires_cpu(const TensorView &x, const char *op_name) {
+inline void _require_cpu(const TensorView &x, const char *op_name) {
   if (x.storage->device() != Device::Cpu) {
     throw std::runtime_error(std::string(op_name) + ": requires Cpu.");
   }
