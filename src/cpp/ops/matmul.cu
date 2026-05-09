@@ -10,10 +10,10 @@ std::shared_ptr<Storage> _cpu_matmul(
     py::ssize_t csize
 ) {
     auto numel = numel_from_shape(out_shape);
-    auto new_storage = Storage::allocate(numel, x1.storage->dtype(), Device::Cpu);
-    auto* ptr1 = static_cast<const T*>(x1.storage->data());
-    auto* ptr2 = static_cast<const T*>(x2.storage->data());
-    auto ptr_out = static_cast<T*>(new_storage->data());
+    auto storage_out = Storage::allocate(numel, x1.storage->dtype(), Device::Cpu);
+    auto* ptr_in1 = static_cast<const T*>(x1.storage->data());
+    auto* ptr_in2 = static_cast<const T*>(x2.storage->data());
+    auto ptr_out = static_cast<T*>(storage_out->data());
     std::vector<py::ssize_t> loc(ndim);
     for (py::ssize_t ptr_out_idx = 0; ptr_out_idx < numel; ++ptr_out_idx) {
         // B, i, j -> derive B, i, c and B, c, j
@@ -29,7 +29,7 @@ std::shared_ptr<Storage> _cpu_matmul(
                 idx1 += x1.strides[dim_i] * loc[dim_i];
                 idx2 += x2.strides[dim_i] * loc[dim_i];
             }
-            acc += ptr1[idx1] * ptr2[idx2];
+            acc += ptr_in1[idx1] * ptr_in2[idx2];
         }
         ptr_out[ptr_out_idx] = acc;
 
@@ -41,15 +41,15 @@ std::shared_ptr<Storage> _cpu_matmul(
             j -= 1;
         }
     }
-    return new_storage;
+    return storage_out;
 }
 
 template <class T>
 __global__ void _matmul_kernel(
-    const T* in_a, const T* in_b, T* out, 
+    const T* ptr_in1, const T* ptr_in2, T* ptr_out, 
+    TensorViewStatic view_1, TensorViewStatic view_2,
     py::ssize_t numel, py::ssize_t ndim, 
-    py::ssize_t csize, py::ssize_t lsize, py::ssize_t rsize,
-    TensorViewStatic view_a, TensorViewStatic view_b
+    py::ssize_t csize, py::ssize_t lsize, py::ssize_t rsize
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= numel) return;
@@ -59,26 +59,26 @@ __global__ void _matmul_kernel(
     loc[ndim - 1] = r % rsize; r /= rsize;
     loc[ndim - 2] = r % lsize; r /= lsize;
     for (int j = ndim - 3; j >= 0; --j) {
-        loc[j] = r % view_a.shape[j];
-        r /= view_a.shape[j];
+        loc[j] = r % view_1.shape[j];
+        r /= view_1.shape[j];
     }
 
     T acc = 0;
     for (py::ssize_t c = 0; c < csize; ++c) {
-        py::ssize_t idx1 = view_a.offset 
-                            + c * view_a.strides[ndim - 1] 
-                            + loc[ndim - 2] * view_a.strides[ndim - 2];
-        py::ssize_t idx2 = view_b.offset 
-                            + c * view_b.strides[ndim - 2]
-                            + loc[ndim - 1] * view_b.strides[ndim - 1];
+        py::ssize_t idx1 = view_1.offset 
+                            + c * view_1.strides[ndim - 1] 
+                            + loc[ndim - 2] * view_1.strides[ndim - 2];
+        py::ssize_t idx2 = view_2.offset 
+                            + c * view_2.strides[ndim - 2]
+                            + loc[ndim - 1] * view_2.strides[ndim - 1];
         for (auto dim_i = 0; dim_i < ndim - 2; ++dim_i) {
-            idx1 += view_a.strides[dim_i] * loc[dim_i];
-            idx2 += view_b.strides[dim_i] * loc[dim_i];
+            idx1 += view_1.strides[dim_i] * loc[dim_i];
+            idx2 += view_2.strides[dim_i] * loc[dim_i];
         }
-        acc += in_a[idx1] * in_b[idx2];
+        acc += ptr_in1[idx1] * ptr_in2[idx2];
     }
 
-    out[i] = acc;
+    ptr_out[i] = acc;
 }
 
 template <class T>
@@ -93,29 +93,22 @@ std::shared_ptr<Storage> _cuda_matmul(
 ) {
     auto numel = numel_from_shape(out_shape);
     auto new_storage = Storage::allocate(numel, x1.storage->dtype(), Device::Cuda);
-    auto* ptr1 = static_cast<const T*>(x1.storage->data());
-    auto* ptr2 = static_cast<const T*>(x2.storage->data());
+    auto* ptr_in1 = static_cast<const T*>(x1.storage->data());
+    auto* ptr_in2 = static_cast<const T*>(x2.storage->data());
     auto ptr_out = static_cast<T*>(new_storage->data());
     launch_1d(
         numel, _matmul_kernel<T>,
-        ptr1, ptr2, ptr_out, numel, ndim, csize, lsize, rsize, 
-        tensor_view_to_static(x1), tensor_view_to_static(x2)
+        ptr_in1, ptr_in2, ptr_out,
+        tensor_view_to_static(x1), tensor_view_to_static(x2),
+        numel, ndim, csize, lsize, rsize
     );
 
     return new_storage;
 }
 
 std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
-    // Sanity checks
-    auto s1 = x1.storage;
-    auto s2 = x2.storage;
-    if (s1->dtype() != s2->dtype())
-        throw std::invalid_argument(
-            "matmul: expected homogeneous tensors, got " + dtype_to_format(s1->dtype()) 
-            +  " and " + dtype_to_format(s2->dtype()) + "."
-        );
-    if (s1->device() != s2->device())
-        throw std::invalid_argument("matmul: expected homogeneous devices.");
+    _require_same_device(x1.storage, x2.storage, "matmul");
+    _require_same_dtype(x1.storage, x2.storage, "matmul");
     if (x1.shape.size() != x2.shape.size())
         throw std::invalid_argument("matmul: x1 and x2 have different ndim.");
     if (x1.shape.size() < 2)
@@ -136,7 +129,7 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
     out_shape[ndim - 2] = lsize;
     out_shape[ndim - 1] = rsize;
 
-    return dispatch_dtype_arithmetic(s1->dtype(), [&]<typename T>() {
+    return dispatch_dtype_arithmetic(x1.storage->dtype(), [&]<typename T>() {
         switch (x1.storage->device()) {
             case Device::Cpu: return _cpu_matmul<T>(x1, x2, ndim, out_shape, csize);
             case Device::Cuda: return _cuda_matmul<T>(x1, x2, ndim, out_shape, csize, lsize, rsize);

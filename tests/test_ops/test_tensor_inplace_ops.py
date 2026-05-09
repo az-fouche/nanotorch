@@ -313,7 +313,7 @@ CPP_INPLACE_OPS = [
 def test_cpp_inplace_shape_mismatch_raises(name, op):
     a = nt.full(5, 7, value=2.0)
     b = nt.full(5, value=2.0)
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         op(a._C_view, b._C_view)
 
 
@@ -321,7 +321,7 @@ def test_cpp_inplace_shape_mismatch_raises(name, op):
 def test_cpp_inplace_dtype_mismatch_raises(name, op):
     a = nt.zeros(5, dtype=nt.float32)
     b = nt.zeros(5, dtype=nt.float64)
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         op(a._C_view, b._C_view)
 
 
@@ -330,7 +330,7 @@ def test_cpp_inplace_dtype_mismatch_raises(name, op):
 def test_cpp_inplace_device_mismatch_raises(name, op):
     a = nt.zeros(5)
     b = nt.zeros(5).to("cuda")
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         op(a._C_view, b._C_view)
 
 

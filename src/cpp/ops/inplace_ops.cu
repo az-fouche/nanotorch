@@ -7,8 +7,8 @@ template<class T, class Op>
 void _cpu_inplace_apply(TensorView& out, const TensorView& other, Op op) {
     auto n_axes = static_cast<py::ssize_t>(out.shape.size());
     auto numel = numel_from_shape(out.shape);
-    auto* data_other = static_cast<const T*>(other.storage->data());
-    auto* data_out = static_cast<T*>(out.storage->data());
+    auto* ptr_other = static_cast<const T*>(other.storage->data());
+    auto* ptr_out = static_cast<T*>(out.storage->data());
     std::vector<py::ssize_t> loc(n_axes);
     for (py::ssize_t i = 0; i < numel; ++i) {
 
@@ -18,7 +18,7 @@ void _cpu_inplace_apply(TensorView& out, const TensorView& other, Op op) {
             idx_out += out.strides[j] * loc[j];
             idx_other += other.strides[j] * loc[j];
         }
-        data_out[idx_out] = op(data_out[idx_out], data_other[idx_other]);
+        ptr_out[idx_out] = op(ptr_out[idx_out], ptr_other[idx_other]);
 
         // Loc update
         py::ssize_t j = n_axes - 1;
@@ -33,17 +33,17 @@ void _cpu_inplace_apply(TensorView& out, const TensorView& other, Op op) {
 
 template <class T, class Op>
 __global__ void _inplace_apply_kernel(
-    py::ssize_t nmax, 
-    T* out, 
-    const T* other, 
+    py::ssize_t n, 
+    T* ptr_out, 
+    const T* ptr_other, 
     TensorViewStatic view_out,
     TensorViewStatic view_other,
     Op op
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i >= nmax) return;
+    if (i >= n) return;
     auto idx_out = unravel(i, view_out);
-    out[idx_out] = op(out[idx_out], other[unravel(i, view_other)]);
+    ptr_out[idx_out] = op(ptr_out[idx_out], ptr_other[unravel(i, view_other)]);
 }
 
 template <class T, class Op>
@@ -65,19 +65,14 @@ void _cuda_inplace_apply(
 
 template <class Dispatch, class Op>
 void _dispatch_inplace_apply(TensorView& out, const TensorView& other, Op op) {
-    if (out.shape != other.shape) {
-        throw std::invalid_argument("_dispatch_inplace_apply: Shape mismatch.");
-    }
-    if (out.storage->device() != other.storage->device()) {
-        throw std::invalid_argument("_dispatch_inplace_apply: Device mismatch.");
-    }
-    if (out.storage->dtype() != other.storage->dtype()) {
-        throw std::invalid_argument("_dispatch_inplace_apply: Dtype mismatch.");
-    }
+    _require_same_device(out.storage, other.storage, "_dispatch_inplace_apply");
+    _require_same_dtype(out.storage, other.storage, "_dispatch_inplace_apply");
+    _require_same_shape(out, other, "_dispatch_inplace_apply");
     Dispatch::run(out.storage->dtype(), [&]<typename T>() {
         switch (out.storage->device()) {
             case Device::Cpu:  _cpu_inplace_apply<T>(out, other, op); break;
             case Device::Cuda: _cuda_inplace_apply<T>(out, other, op); break;
+            default: NT_UNREACHABLE();
         }
     });
     out.storage->bump_version();
@@ -93,19 +88,19 @@ void add_inplace(TensorView& out, const TensorView& other) {
     _dispatch_inplace_apply<DispatchAll>(out, other, AddOp());
 }
 
-DEFINE_INPLACE(Subtract, a - b)
+DEFINE_INPLACE(Sub, a - b)
 void sub_inplace(TensorView& out, const TensorView& other) {
-    _dispatch_inplace_apply<DispatchAll>(out, other, SubtractOp());
+    _dispatch_inplace_apply<DispatchAll>(out, other, SubOp());
 }
 
-DEFINE_INPLACE(Multiply, a * b)
+DEFINE_INPLACE(Mul, a * b)
 void mul_inplace(TensorView& out, const TensorView& other) {
-    _dispatch_inplace_apply<DispatchAll>(out, other, MultiplyOp());
+    _dispatch_inplace_apply<DispatchAll>(out, other, MulOp());
 }
 
-DEFINE_INPLACE(Divide, a / b)
+DEFINE_INPLACE(Div, a / b)
 void div_inplace(TensorView& out, const TensorView& other) {
-    _dispatch_inplace_apply<DispatchArithmetic>(out, other, DivideOp());
+    _dispatch_inplace_apply<DispatchArithmetic>(out, other, DivOp());
 }
 
 DEFINE_INPLACE(Copy, b)

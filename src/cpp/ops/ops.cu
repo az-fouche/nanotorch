@@ -23,8 +23,8 @@ bool equals(const TensorView& x1, const TensorView& x2) {
     auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
     auto numel = numel_from_shape(x1.shape);
     return dispatch_dtype(s1->dtype(), [&]<typename T>() {
-        auto* ptr1 = static_cast<const T*>(s1->data());
-        auto* ptr2 = static_cast<const T*>(s2->data());
+        auto* ptr_in1 = static_cast<const T*>(s1->data());
+        auto* ptr_in2 = static_cast<const T*>(s2->data());
         std::vector<py::ssize_t> loc(n_axes);
         for (py::ssize_t i = 0; i < numel; ++i) {
             // Current loc eq check
@@ -33,7 +33,7 @@ bool equals(const TensorView& x1, const TensorView& x2) {
                 idx1 += x1.strides[j] * loc[j];
                 idx2 += x2.strides[j] * loc[j];
             }
-            if (ptr1[idx1] != ptr2[idx2]) return false;
+            if (ptr_in1[idx1] != ptr_in2[idx2]) return false;
 
             // Loc update
             py::ssize_t j = n_axes - 1;
@@ -200,45 +200,46 @@ std::shared_ptr<Storage> gather_from_axes(
 
 template <class T>
 __global__ void _copy_kernel(
-    py::ssize_t n, const T* data_src, T* data_out, TensorViewStatic view_src, TensorViewStatic view_out 
+    py::ssize_t n, const T* ptr_in, T* ptr_out, 
+    TensorViewStatic view_in, TensorViewStatic view_out 
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
-    data_out[unravel(i, view_out)] = data_src[unravel(i, view_src)]; 
+    ptr_out[unravel(i, view_out)] = ptr_in[unravel(i, view_in)]; 
 }
 
 
 template <class T>
 void _cuda_copy_view(
-    const T* data_src, T* data_out, const TensorView& view_src, const TensorView& view_out
+    const T* ptr_in, T* ptr_out, const TensorView& view_in, const TensorView& view_out
 ) {
-    auto numel = numel_from_shape(view_src.shape);
+    auto numel = numel_from_shape(view_in.shape);
     launch_1d(
         numel, _copy_kernel<T>,
-        numel, data_src, data_out, 
-        tensor_view_to_static(view_src), tensor_view_to_static(view_out)
+        numel, ptr_in, ptr_out, 
+        tensor_view_to_static(view_in), tensor_view_to_static(view_out)
     );
 }
 
 template <class T>
 void _cpu_copy_view(
-    const T* data_src, T* data_out, const TensorView& view_src, const TensorView& view_out
+    const T* ptr_in, T* ptr_out, const TensorView& view_in, const TensorView& view_out
 ) {
-    auto n_axes = static_cast<py::ssize_t>(view_src.shape.size());
-    auto numel = numel_from_shape(view_src.shape);
+    auto n_axes = static_cast<py::ssize_t>(view_in.shape.size());
+    auto numel = numel_from_shape(view_in.shape);
     std::vector<py::ssize_t> loc(n_axes);
     for (py::ssize_t i = 0; i < numel; ++i) {
-        py::ssize_t idx_src = view_src.offset, idx_out = view_out.offset;
+        py::ssize_t idx_src = view_in.offset, idx_out = view_out.offset;
         for (py::ssize_t j = 0; j < n_axes; ++j) {
-            idx_src += view_src.strides[j] * loc[j];
+            idx_src += view_in.strides[j] * loc[j];
             idx_out += view_out.strides[j] * loc[j];
         }
-        data_out[idx_out] = data_src[idx_src];
+        ptr_out[idx_out] = ptr_in[idx_src];
 
         py::ssize_t j = n_axes - 1;
         while (j >= 0) { 
             loc[j] += 1;
-            if (loc[j] < view_src.shape[j]) break;
+            if (loc[j] < view_in.shape[j]) break;
             loc[j] = 0;
             j -= 1;
         }
@@ -259,17 +260,18 @@ void copy_view(const TensorView& src, const TensorView& out) {
     });
 }
 
-std::shared_ptr<Storage> clone_contiguous_view_from(const TensorView& src) {
-    auto new_storage = Storage::allocate(
-        numel_from_shape(src.shape), src.storage->dtype(), src.storage->device()
+std::shared_ptr<Storage> clone_contiguous_view_from(const TensorView& x) {
+    auto storage_out = Storage::allocate(
+        numel_from_shape(x.shape), x.storage->dtype(), x.storage->device()
     );
-    auto n_axes = src.shape.size();
+    auto n_axes = x.shape.size();
     std::vector<py::ssize_t> out_strides(n_axes);
     if (n_axes > 0) out_strides[n_axes - 1] = 1;
-    for (int j = n_axes - 2; j >= 0; --j) out_strides[j] = src.shape[j + 1] * out_strides[j + 1];
-    auto out = TensorView(new_storage, src.shape, out_strides, 0);
-    copy_view(src, out);
-    return new_storage;
+    for (py::ssize_t j = n_axes - 2; j >= 0; --j) 
+        out_strides[j] = x.shape[j + 1] * out_strides[j + 1];
+    auto view_out = TensorView(storage_out, x.shape, out_strides, 0);
+    copy_view(x, view_out);
+    return storage_out;
 }
 
 void bind_ops_(py::module_& m) {
