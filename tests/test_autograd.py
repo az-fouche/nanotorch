@@ -239,6 +239,15 @@ def test_backward_inplace_ops_leaf_raises():
         x2 *= 1.5
 
 
+def test_backward_inplace_ops_guard_raises():
+    x = nt.tensor([5.0, 1.0], requires_grad=True)
+    y = x.exp()
+    y += 3
+    loss = y.sum()
+    with pytest.raises(RuntimeError):
+        loss.backward()
+
+
 def test_backward_order_unbalanced():
     x = nt.tensor([1.0, 2.0], requires_grad=True)
     a = x.exp()
