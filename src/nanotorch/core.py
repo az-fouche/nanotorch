@@ -181,7 +181,7 @@ class Tensor:
         fax = _FancyAxes.compute(view.shape, new_index)
         new_data = _C.gather_from_axes(
             x=view._C_view,
-            new_sh=fax.new_shape,
+            new_shape=fax.new_shape,
             fancy_dims_in_src=fax.fancy_dims_in_src,
             fancy_dims_data=[t._C_view for t in fax.fancy_dims_data],
             out_axis_is_fancy=fax.out_axis_is_fancy,

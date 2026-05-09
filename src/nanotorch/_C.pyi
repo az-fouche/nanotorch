@@ -115,7 +115,7 @@ def scatter_to_axes(
 def gather_from_axes(
     *,
     x: TensorView,
-    new_sh: tuple[int, ...],
+    new_shape: tuple[int, ...],
     fancy_dims_in_src: Sequence[int],
     fancy_dims_data: Sequence[TensorView],
     out_axis_is_fancy: Sequence[bool],

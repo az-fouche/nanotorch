@@ -41,7 +41,7 @@ std::shared_ptr<Storage> _cpu_sum(
                     }
                 }
                 out_data[i] = acc;
-                // Cary over out
+                // Carry over out
                 py::ssize_t k = ndim_out - 1;
                 while (k >= 0) { 
                     loc_out[k] += 1;

@@ -306,7 +306,7 @@ void bind_ops_(py::module_& m) {
     );
     m.def(
         "gather_from_axes", &gather_from_axes, "Extract elements along fancy indices.", 
-          py::arg("x"), py::arg("new_sh"), py::arg("fancy_dims_in_src"), py::arg("fancy_dims_data"), 
+          py::arg("x"), py::arg("new_shape"), py::arg("fancy_dims_in_src"), py::arg("fancy_dims_data"), 
           py::arg("out_axis_is_fancy"), py::arg("out_axis_target")
     );
 }

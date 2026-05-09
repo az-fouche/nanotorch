@@ -30,6 +30,7 @@ def main():
 
     X: nt.Tensor = nt.rand(N_SAMPLES, N_FEATURES).to(device)
     y = (X.sum(axis=1) + 3.14).to(device)
+
     model = nn.Sequential(
         nn.Linear(N_FEATURES, HIDDEN_SIZE),
         nn.ReLU(),
@@ -40,8 +41,9 @@ def main():
         nn.Linear(HIDDEN_SIZE, 1),
     ).to(device)
     optimizer = nn.GradientDescent(model.parameters(), lr=LR)
+
     print(f"== Starting Training on {device} ==")
-    for epoch in range(N_EPOCH):
+    for _ in range(N_EPOCH):
         pbar = tqdm.tqdm(range(0, N_SAMPLES, BATCH_SIZE), desc="Batch", ncols=80)
         for i in pbar:
             xb, yb_true = (X[i : i + BATCH_SIZE], y[i : i + BATCH_SIZE])

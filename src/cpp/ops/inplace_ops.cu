@@ -124,7 +124,7 @@ void copy_inplace(TensorView& out, const TensorView& other) {
 }
 
 void bind_inplace_ops_(py::module_& m) {
-    m.def("add_inplace", &add_inplace, "A dd elements inplace.", py::arg("x1"), py::arg("x2"));
+    m.def("add_inplace", &add_inplace, "Add elements inplace.", py::arg("x1"), py::arg("x2"));
     m.def("sub_inplace", &sub_inplace, "Subtract elements inplace.", py::arg("x1"), py::arg("x2"));
     m.def("mul_inplace", &mul_inplace, "Multiply elements inplace.", py::arg("x1"), py::arg("x2"));
     m.def("div_inplace", &div_inplace, "Divide elements inplace.", py::arg("x1"), py::arg("x2"));
