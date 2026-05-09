@@ -1,10 +1,11 @@
 """Base class for all derivable tensor operations."""
 
-from typing import Any
+from typing import Any, ClassVar
 
 from nanotorch.core import Tensor
 
 from .grad_mode import is_grad_enabled
+from .ops_spec import Input
 
 
 class Function:
@@ -14,6 +15,13 @@ class Function:
     with save_for_backward(*tensors_like). All operations should be bound at
     module initialization in nanotorch/__init__.py to avoid circular imports.
     """
+
+    op_spec: ClassVar[tuple[Input, ...]]
+
+    def __init_subclass__(cls, **kw) -> None:
+        super().__init_subclass__(**kw)
+        if cls is not Function and "op_spec" not in cls.__dict__:
+            raise TypeError(f"{cls.__name__} must declare its ops spec.")
 
     def __init__(self):
         self._inputs: Any = None

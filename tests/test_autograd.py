@@ -1,150 +1,17 @@
 import math
+import random
 
 import pytest
 
 import nanotorch as nt
 import nanotorch.autograd as ag
 from nanotorch import testing
+from nanotorch.autograd import ops_spec as sp
+from nanotorch.core import Tensor, TensorLike
 
 nt.manual_seed(42)
 
-
-@pytest.mark.parametrize(
-    "op",
-    [
-        ag.SumOp,
-        ag.MeanOp,
-        ag.NegOp,
-        ag.ExpOp,
-        ag.TOp,
-        ag.ReluOp,
-        ag.SigmoidOp,
-        ag.TanhOp,
-        ag.SqrtOp,
-    ],
-)
-@pytest.mark.parametrize("x", [nt.rand(3), nt.rand(3, 4), nt.rand(3, 1, 4)])
-def test_gradcheck_unary_ops(op: type[ag.Function], x: nt.Tensor):
-    if op is ag.SqrtOp:
-        x = x.to(nt.float64)
-    else:
-        x = x.to(nt.float64) - 0.5
-    x.enable_grad()
-    testing.gradcheck(op, x)
-
-
-@pytest.mark.parametrize("op", [ag.AddOp, ag.SubOp, ag.MulOp, ag.TrueDivOp])
-@pytest.mark.parametrize(
-    "inputs",
-    [
-        ((nt.rand(3), nt.rand(3))),
-        ((nt.rand(3, 4), nt.rand(3, 4))),
-        ((nt.rand(4), nt.rand(3, 1, 4))),
-    ],
-)
-def test_gradcheck_binary_ops(op: type[ag.Function], inputs: tuple[nt.Tensor, ...]):
-    inputs = tuple(x.to(nt.float64) for x in inputs)
-    for x in inputs:
-        x.enable_grad()
-    testing.gradcheck(op, *inputs)
-
-
-@pytest.mark.parametrize("x", [nt.rand(3), nt.rand(3, 4), nt.rand(3, 1, 4)])
-def test_gradcheck_log_ops(x: nt.Tensor):
-    x = x.to(nt.float64)
-    x.enable_grad()
-    testing.gradcheck(ag.LogOp, x)
-
-
-@pytest.mark.parametrize(
-    "x, exp",
-    [
-        ((nt.rand(3), nt.rand(1))),
-        ((nt.rand(3, 4), nt.rand(1))),
-        ((nt.rand(4, 1, 3), nt.rand(1))),
-    ],
-)
-def test_gradcheck_pow_op(x: nt.Tensor, exp: nt.Tensor):
-    x = x.to(nt.float64)
-    x.enable_grad()
-    testing.gradcheck(ag.PowOp, x, exp)
-
-
-@pytest.mark.parametrize(
-    "x1,x2",
-    [
-        ((nt.rand(3, 5), nt.rand(5, 6))),
-        ((nt.rand(7, 2), nt.rand(2, 7))),
-        ((nt.rand(5, 1), nt.rand(1, 5))),
-        ((nt.rand(3, 3, 5, 1), nt.rand(3, 1, 5))),
-        ((nt.rand(3, 4, 5, 2), nt.rand(1, 4, 2, 3))),
-        ((nt.rand(5), nt.rand(5))),
-        ((nt.rand(4, 5), nt.rand(5))),
-    ],
-)
-def test_gradcheck_matmul_op(x1: nt.Tensor, x2: nt.Tensor):
-    x1 = x1.to(nt.float64)
-    x2 = x2.to(nt.float64)
-    x1.enable_grad()
-    x2.enable_grad()
-    testing.gradcheck(ag.MatmulOp, x1, x2)
-
-
-@pytest.mark.parametrize(
-    "x,shape",
-    [
-        (nt.rand(3, 5), (15,)),
-        (nt.rand(15), (3, 5)),
-        (nt.rand(5), (5,)),
-        (nt.rand(5, 4, 1, 3), (1, 4, 5, 3)),
-    ],
-)
-def test_gradcheck_reshape_ops(x: nt.Tensor, shape: tuple[int]):
-    x = x.to(nt.float64)
-    x.enable_grad()
-    testing.gradcheck(ag.ReshapeOp, x, extra_args=shape)
-
-
-@pytest.mark.parametrize(
-    "x,shape",
-    [
-        (nt.rand(1), (3, 5, 4)),
-        (nt.rand(3, 4), (7, 5, 3, 4)),
-        (nt.rand(3, 1), (7, 5, 3, 4)),
-    ],
-)
-def test_gradcheck_expand_ops(x: nt.Tensor, shape: tuple[int]):
-    x = x.to(nt.float64)
-    x.enable_grad()
-    testing.gradcheck(ag.ExpandOp, x, extra_args=shape)
-
-
-@pytest.mark.parametrize(
-    "x",
-    [
-        (nt.rand(3, 4)),
-        (nt.rand(3, 1)),
-        (nt.rand(7, 5, 3, 4)),
-    ],
-)
-def test_gradcheck_T_ops(x: nt.Tensor):
-    x = x.to(nt.float64)
-    x.enable_grad()
-    testing.gradcheck(ag.TOp, x)
-
-
-@pytest.mark.parametrize(
-    "x,dims",
-    [
-        (nt.rand(3, 4), (0, 1)),
-        (nt.rand(3, 4, 5, 6), (0, 1)),
-        (nt.rand(3, 4, 5, 6), (1, 3)),
-    ],
-)
-def test_gradcheck_transpose_ops(x: nt.Tensor, dims: tuple[int]):
-    x = x.to(nt.float64)
-    x.enable_grad()
-    testing.gradcheck(ag.TransposeOp, x, extra_args=dims)
+# Grad state tests
 
 
 def test_requires_grad_default_true():
@@ -284,3 +151,141 @@ def test_version_check_on_backward():
     y += 2
     with pytest.raises(RuntimeError):
         z.backward()
+
+
+def test_no_grad():
+    x = nt.tensor([1.0, 2.0], requires_grad=True)
+    with nt.no_grad():
+        y = 2 * x
+    assert y.grad_fn is None
+
+
+# Autograd engine autocheck
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        ag.AddOp,
+        ag.ExpOp,
+        ag.ExpandOp,
+        ag.LogOp,
+        ag.MatmulOp,
+        ag.MeanOp,
+        ag.MulOp,
+        ag.NegOp,
+        ag.PowOp,
+        ag.ReluOp,
+        ag.ReshapeOp,
+        ag.SigmoidOp,
+        ag.SqrtOp,
+        ag.SubOp,
+        ag.SumOp,
+        ag.TOp,
+        ag.TanhOp,
+        ag.TransposeOp,
+        ag.TrueDivOp,
+    ],
+)
+def test_ops_specs(op: type[ag.Function]):
+    nt.manual_seed(42)
+    random.seed(42)
+    for _ in range(5):
+        inputs = []
+        for input_ in op.op_spec:
+            domain = input_.domain
+            if isinstance(domain, sp.Real):
+                inputs.append(_gen_float_like(input_, inputs))
+            else:
+                inputs.extend(_gen_axis_like(domain, inputs))
+        testing.gradcheck(
+            op,
+            *[x for x in inputs if isinstance(x, Tensor)],
+            extra_args=[x for x in inputs if not isinstance(x, Tensor)],
+        )
+
+
+def _gen_float_like(input_: sp.Input, inputs: list[TensorLike]) -> TensorLike:
+    if input_.kind == "scalar":
+        assert input_.shape is None
+        shape = ()
+    elif isinstance(input_.shape, sp.AnyShape):
+        ndim = random.randint(input_.shape.min_ndim, 5)
+        shape = nt.randint(1, 6, (ndim,)).tolist()
+    elif isinstance(input_.shape, sp.BroadcastableTo):
+        ref = inputs[input_.shape.ref]
+        assert isinstance(ref, Tensor)
+        ndim = random.randint(0, ref.ndim + 1)
+        suffix = ref.shape[ref.ndim - ndim :]
+        shape = [1 if random.random() < 0.5 else ax for ax in suffix]
+    elif isinstance(input_.shape, sp.MatmulBroadcast):
+        ref = inputs[input_.shape.ref]
+        assert isinstance(ref, Tensor)
+        shape = [1 if random.random() < 0.5 else ax for ax in ref.shape[:-2]]
+        shape += [ref.shape[-1], random.randint(1, 8)]
+    else:
+        raise AssertionError(f"Unhandled shape spec: {input_.shape}")
+    if isinstance(shape, int):
+        shape = (shape,)
+    if isinstance(shape, list):
+        shape = tuple(shape)
+    assert isinstance(shape, tuple)
+
+    x = nt.rand(*shape, dtype=nt.float64, requires_grad=False)
+
+    if isinstance(input_.domain, sp.Real):
+        x = (input_.domain.high - input_.domain.low) * x + input_.domain.low
+    if input_.kind == "tensor":
+        x = x.clone()
+        x.enable_grad()
+    else:
+        x = x.item()
+    return x
+
+
+def _gen_axis_like(domain: sp.InputDomain, inputs: list[TensorLike]) -> tuple[int, ...]:
+    ref = inputs[domain.ref]  # type: ignore
+    assert isinstance(ref, Tensor)
+    if isinstance(domain, (sp.Axis, sp.AxisSet)):
+        naxes = (
+            1 if isinstance(domain, (sp.Axis)) else random.randint(domain.min, ref.ndim)
+        )
+        return tuple(random.sample(range(ref.ndim), naxes))
+    elif isinstance(domain, sp.AxisPermutation):
+        return tuple(random.sample(range(ref.ndim), ref.ndim))
+    elif isinstance(domain, sp.AxisReshape):
+        return _gen_reshape(ref)
+    elif isinstance(domain, sp.AxisExpand):
+        return _gen_expand(ref)
+    else:
+        raise AssertionError(f"Cannot handle domain {domain}")
+
+
+def _gen_reshape(ref: Tensor) -> tuple[int, ...]:
+    factors, n = [], math.prod(ref.shape)
+    p = 2
+    while p * p <= n:
+        while n % p == 0:
+            factors.append(p)
+            n //= p
+        p += 1
+    if n > 1:
+        factors.append(n)
+    ndim: int = 1 + random.randint(0, len(factors))
+    buckets = [1] * ndim
+    for f in factors:
+        buckets[random.randint(0, len(buckets) - 1)] *= f
+    buckets += [1] * random.randint(0, 5)
+    random.shuffle(buckets)
+    return tuple(buckets)  # type: ignore
+
+
+def _gen_expand(ref: Tensor) -> tuple[int, ...]:
+    shape = []
+    for ax in ref.shape[::-1]:
+        shape = [random.randint(1, 8) if ax == 1 else ax] + shape
+    while True:
+        shape = [random.randint(1, 8)] + shape
+        if random.random() < 0.5:
+            break
+    return tuple(shape)

@@ -207,6 +207,52 @@ def rand(
     )
 
 
+def randint(
+    low: int,
+    high: int,
+    shape: tuple[int, ...] | None = None,
+    dtype: Dtype = dt.int64,
+    requires_grad: bool = False,
+    device: Device | DeviceLiteral = Device.Cpu,
+) -> Tensor:
+    """Initialize a new tensor initialized with random integers.
+
+    Parameters
+    ----------
+    low: int
+        Minimum value (inclusive).
+    high: int
+        Maximum value (exclusive).
+    shape: tuple[int, ...]
+        Dimensions of the tensor, default () -> single value.
+    dtype: Dtype
+        Data type to cast the values to. If not set, the tensor will be promoted
+        to the most precise data type following the DataTypes enum order.
+    requires_grad: bool
+        Enables autograd for this tensor, and all tensors constructed from it
+        through differentiable operations.
+    device: Device | "cpu" | "cuda"
+        Device to store the Tensor on. Operations will be automatically performed
+        on device if there is an available kernel.
+    """
+    if dtype == dt.bool_:
+        raise ValueError("randint() cannot output bool values.")
+    numel = 1 if shape is None else math.prod(shape)
+    base = (
+        _tensor_factory(
+            *(() if shape is None else shape),
+            storage=_C.uniform(numel, dt.float32, get_std_device(device)),
+            requires_grad=False,
+        )
+        * (high - low)
+        + low
+    )
+    base = base.to(dt.int64).to(dtype)
+    if requires_grad:
+        base.enable_grad()
+    return base
+
+
 def _tensor_factory(
     *shape: int, storage: _C.Storage, requires_grad: bool = False
 ) -> Tensor:

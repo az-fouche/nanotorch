@@ -21,9 +21,10 @@ from .autograd import (
     equal_op,
     greater_eq_op,
     greater_op,
+    no_grad,
 )
 from .core import Tensor, TensorLike
-from .factories import arange, eye, full, ones, rand, tensor, zeros
+from .factories import arange, eye, full, ones, rand, randint, tensor, zeros
 from .ops import (
     add,
     clone,
@@ -82,9 +83,11 @@ __all__ = [
     "mean",
     "multiply",
     "negate",
+    "no_grad",
     "ones",
     "pow",
     "rand",
+    "randint",
     "relu",
     "reshape",
     "sigmoid",

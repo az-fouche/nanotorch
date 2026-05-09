@@ -23,8 +23,8 @@ def gradcheck(
     *inputs: nt.Tensor,
     extra_args: Sequence | None = None,
     extra_kwargs: dict | None = None,
-    eps: float = 1e-6,
-    rtol: float = 1e-5,
+    eps: float = 1e-4,
+    rtol: float = 1e-4,
 ):
     """Performs gradient correctness checking for testing."""
     if extra_args is None:

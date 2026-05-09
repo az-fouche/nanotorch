@@ -193,6 +193,29 @@ def test_rand_2d():
     assert x.shape == (10, 5)
 
 
+def test_randint_scalar():
+    x = nt.randint(0, 5)
+    assert x.shape == ()
+    assert 0 <= x.item() < 5
+
+
+def test_randint_1d():
+    x = nt.randint(0, 5, (10,))
+    assert x.shape == (10,)
+    assert all(0 <= x < 5 for xi in x.tolist())  # type: ignore
+
+
+def test_randint_2d():
+    x = nt.randint(0, 5, (10, 5))
+    assert x.shape == (10, 5)
+    assert all(0 <= x < 5 for xi in x.flatten().tolist())  # type: ignore
+
+
+def test_randint_requires_tuple():
+    with pytest.raises(TypeError):
+        x = nt.randint(0, 5, 10)  # type: ignore -- Should not return (10,)
+
+
 @requires_cuda
 @pytest.mark.parametrize(
     "factory,args,kwargs",
