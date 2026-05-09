@@ -49,7 +49,7 @@ __global__ void _matmul_kernel(
     const T* in_a, const T* in_b, T* out, 
     py::ssize_t numel, py::ssize_t ndim, 
     py::ssize_t csize, py::ssize_t lsize, py::ssize_t rsize,
-    StridedView view_a, StridedView view_b
+    TensorViewStatic view_a, TensorViewStatic view_b
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= numel) return;
@@ -96,21 +96,10 @@ std::shared_ptr<Storage> _cuda_matmul(
     auto* ptr1 = static_cast<const T*>(x1.storage->data());
     auto* ptr2 = static_cast<const T*>(x2.storage->data());
     auto ptr_out = static_cast<T*>(new_storage->data());
-
-    auto view_a = StridedView(x1.shape.size(), x1.offset);
-    for (size_t j = 0; j < x1.shape.size(); ++j) {
-        view_a.shape[j] = x1.shape[j];
-        view_a.strides[j] = x1.strides[j];
-    }
-    auto view_b = StridedView(x2.shape.size(), x2.offset);
-    for (size_t j = 0; j < x2.shape.size(); ++j) {
-        view_b.shape[j] = x2.shape[j];
-        view_b.strides[j] = x2.strides[j];
-    }
-
     launch_1d(
         numel, _matmul_kernel<T>,
-        ptr1, ptr2, ptr_out, numel, ndim, csize, lsize, rsize, view_a, view_b
+        ptr1, ptr2, ptr_out, numel, ndim, csize, lsize, rsize, 
+        tensor_view_to_static(x1), tensor_view_to_static(x2)
     );
 
     return new_storage;

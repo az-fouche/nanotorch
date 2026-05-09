@@ -200,7 +200,7 @@ std::shared_ptr<Storage> gather_from_axes(
 
 template <class T>
 __global__ void _copy_kernel(
-    py::ssize_t n, const T* data_src, T* data_out, StridedView view_src, StridedView view_out 
+    py::ssize_t n, const T* data_src, T* data_out, TensorViewStatic view_src, TensorViewStatic view_out 
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
@@ -213,19 +213,10 @@ void _cuda_copy_view(
     const T* data_src, T* data_out, const TensorView& view_src, const TensorView& view_out
 ) {
     auto numel = numel_from_shape(view_src.shape);
-    auto view_a = StridedView(view_src.shape.size(), view_src.offset);
-    for (size_t j = 0; j < view_src.shape.size(); ++j) {
-        view_a.shape[j] = view_src.shape[j];
-        view_a.strides[j] = view_src.strides[j];
-    }
-    auto view_b = StridedView(view_out.shape.size(), view_out.offset);
-    for (size_t j = 0; j < view_out.shape.size(); ++j) {
-        view_b.shape[j] = view_out.shape[j];
-        view_b.strides[j] = view_out.strides[j];
-    }
     launch_1d(
         numel, _copy_kernel<T>,
-        numel, data_src, data_out, view_a, view_b
+        numel, data_src, data_out, 
+        tensor_view_to_static(view_src), tensor_view_to_static(view_out)
     );
 }
 

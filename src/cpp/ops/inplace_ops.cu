@@ -36,8 +36,8 @@ __global__ void _inplace_apply_kernel(
     py::ssize_t nmax, 
     T* out, 
     const T* other, 
-    StridedView view_out,
-    StridedView view_other,
+    TensorViewStatic view_out,
+    TensorViewStatic view_other,
     Op op
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -51,24 +51,14 @@ void _cuda_inplace_apply(
     const TensorView& out, const TensorView& other, Op op
 ) {
     auto n = numel_from_shape(out.shape);
-    auto view_other = StridedView(other.shape.size(), other.offset);
-    for (size_t j = 0; j < other.shape.size(); ++j) {
-        view_other.shape[j] = other.shape[j];
-        view_other.strides[j] = other.strides[j];
-    }
-    auto view_out = StridedView(out.shape.size(), out.offset);
-    for (size_t j = 0; j < out.shape.size(); ++j) {
-        view_out.shape[j] = out.shape[j];
-        view_out.strides[j] = out.strides[j];
-    }
     launch_1d(
         n, 
         _inplace_apply_kernel<T, Op>,
         n,
         static_cast<T*>(out.storage->data()),
         static_cast<const T*>(other.storage->data()),
-        view_out,
-        view_other,
+        tensor_view_to_static(out),
+        tensor_view_to_static(other),
         op
     );
 }

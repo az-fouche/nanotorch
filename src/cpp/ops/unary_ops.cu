@@ -60,8 +60,8 @@ __global__ void _sum_kernel(
     py::ssize_t nmax, 
     const T_in* in_storage, 
     T_out* out_storage, 
-    StridedView view_keep,
-    StridedView view_drop,
+    TensorViewStatic view_keep,
+    TensorViewStatic view_drop,
     py::ssize_t numel_drop
 ) {
     // TODO: optimize the parallelization
@@ -84,12 +84,12 @@ std::shared_ptr<Storage> _cuda_sum(
     py::ssize_t numel_keep,
     py::ssize_t numel_drop
 ) {
-    auto view_keep = StridedView(axis_keep.size(), input.offset);
+    auto view_keep = TensorViewStatic(axis_keep.size(), input.offset);
     for (size_t p = 0; p < axis_keep.size(); ++p) {
         view_keep.shape[p] = input.shape[axis_keep[p]];
         view_keep.strides[p] = input.strides[axis_keep[p]];
     }
-    auto view_drop = StridedView(axis_drop.size(), 0); // offset already counted in view_keep
+    auto view_drop = TensorViewStatic(axis_drop.size(), 0); // offset already counted in view_keep
     for (size_t p = 0; p < axis_drop.size(); ++p) {
         view_drop.shape[p] = input.shape[axis_drop[p]];
         view_drop.strides[p] = input.strides[axis_drop[p]];
@@ -184,7 +184,7 @@ __global__ void _unary_kernel(
     T* out, 
     py::ssize_t n, 
     Op op, 
-    StridedView view
+    TensorViewStatic view
 ) {
     auto i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i >= n) return;
@@ -196,11 +196,6 @@ template <class Dispatch, class Op>
 std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView& x, Op op) {
     auto n = numel_from_shape(x.shape);
     auto out = Storage::allocate(n, x.storage->dtype(), Device::Cuda);
-    auto view = StridedView(x.shape.size(), x.offset);
-    for (size_t j = 0; j < x.shape.size(); ++j) {
-        view.shape[j] = x.shape[j];
-        view.strides[j] = x.strides[j];
-    }
     Dispatch::run(x.storage->dtype(), [&]<class T>() {
         launch_1d(
             n, 
@@ -209,7 +204,7 @@ std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView& x, Op op) {
             static_cast<T*>(out->data()),
             n,
             op,
-            view
+            tensor_view_to_static(x)
         );
     });
     return out;

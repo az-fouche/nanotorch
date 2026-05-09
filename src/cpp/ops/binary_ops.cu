@@ -44,8 +44,8 @@ template <class TIn, class TOut, class Op>
 __global__ void _binary_kernel(
     const TIn* in_a, 
     const TIn* in_b, 
-    StridedView view_a,
-    StridedView view_b,
+    TensorViewStatic view_a,
+    TensorViewStatic view_b,
     TOut* out, 
     py::ssize_t n, 
     Op op
@@ -67,17 +67,6 @@ std::shared_ptr<Storage> _cuda_binary_op_generic(
     auto n = numel_from_shape(a.shape);
     auto eff_dtype = out_dtype.value_or(a.storage->dtype());
     auto out = Storage::allocate(n, eff_dtype, Device::Cuda);
-
-    auto view_a = StridedView(a.shape.size(), a.offset);
-    for (size_t j = 0; j < a.shape.size(); ++j) {
-        view_a.shape[j] = a.shape[j];
-        view_a.strides[j] = a.strides[j];
-    }
-    auto view_b = StridedView(b.shape.size(), b.offset);
-    for (size_t j = 0; j < b.shape.size(); ++j) {
-        view_b.shape[j] = b.shape[j];
-        view_b.strides[j] = b.strides[j];
-    }
     Dispatch::run(eff_dtype, [&]<class O>() {
         Dispatch::run(a.storage->dtype(), [&]<class T>() {
             launch_1d(
@@ -85,8 +74,8 @@ std::shared_ptr<Storage> _cuda_binary_op_generic(
                 _binary_kernel<T, O, Op>,
                 static_cast<const T*>(a.storage->data()),
                 static_cast<const T*>(b.storage->data()),
-                view_a,
-                view_b,
+                tensor_view_to_static(a),
+                tensor_view_to_static(b),
                 static_cast<O*>(out->data()),
                 n,
                 op
