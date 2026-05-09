@@ -286,45 +286,32 @@ class SumOp(Function):
         keepdim: bool = False,
         dtype: Dtype | None = None,
     ) -> Tensor:
-        if axis is None:
-            axis = tuple(range(x.ndim))
-
-        self._axis = axis
-        self._keepdim = keepdim
-
-        if axis == ():
-            self._orig_shape = None
-            return x.to(dtype or x.dtype)
-        elif isinstance(axis, int):
-            axis = (axis,)
-
-        axis = tuple(ax + x.ndim if ax < 0 else ax for ax in axis)
-        if any(not isinstance(ax, int) for ax in axis):
-            raise TypeError(f"Invalid axis: {axis}")
-        if len(set(axis)) != len(axis):
-            raise ValueError(f"Redundant axes: {axis}")
-        if any(ax < 0 or ax >= x.ndim for ax in axis):
-            raise IndexError(f"Invalid axis: {axis}")
-        if keepdim:
-            new_shape = tuple(1 if i in axis else s for i, s in enumerate(x.shape))
-        else:
-            new_shape = tuple(s for i, s in enumerate(x.shape) if i not in axis)
+        self._axis = _broadcast_axis(axis, x)
 
         if dtype is None:
             dtype = max(x.dtype, Dtype.Int64)
+        if keepdim:
+            new_shape = tuple(
+                1 if i in self._axis else s for i, s in enumerate(x.shape)
+            )
+        else:
+            new_shape = tuple(s for i, s in enumerate(x.shape) if i not in self._axis)
 
         if x.is_empty:
             return Tensor._new_contiguous(
                 _C.zeros(math.prod(new_shape), dtype, x.device), new_shape
             )
         self._orig_shape = x.shape
-
-        return Tensor._new_contiguous(_C.sum(x._C_view, axis, dtype), new_shape)
+        return Tensor._new_contiguous(_C.sum(x._C_view, self._axis, dtype), new_shape)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self._orig_shape is None:
+        if not self._orig_shape:
             return (grad_out,)
-        return (grad_out.expand(self._orig_shape),)
+        old_shape_dim = tuple(
+            1 if dim in self._axis else self._orig_shape[dim]
+            for dim in range(len(self._orig_shape))
+        )
+        return (grad_out.reshape(*old_shape_dim).expand(self._orig_shape),)
 
 
 class MeanOp(Function):
@@ -359,15 +346,22 @@ class MeanOp(Function):
             dtype = x.dtype
         if dtype < Dtype.Float32:
             raise TypeError("Cannot take mean of integer tensor, cast to fp.")
-        sum_ = x.sum(axis=axis, keepdim=keepdim, dtype=dtype)
+        self._axis = _broadcast_axis(axis, x)
+        sum_ = x.sum(axis=self._axis, keepdim=keepdim, dtype=dtype)
         self._orig_shape = x.shape
         self._denom = x.numel // sum_.numel
         return sum_ / self._denom
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
-        if self._orig_shape is None:
-            return (grad_out / self._denom,)
-        return (grad_out.expand(self._orig_shape) / self._denom,)
+        if not self._orig_shape:
+            return (grad_out,)
+        old_shape_dim = tuple(
+            1 if dim in self._axis else self._orig_shape[dim]
+            for dim in range(len(self._orig_shape))
+        )
+        return (
+            grad_out.reshape(*old_shape_dim).expand(self._orig_shape) / self._denom,
+        )
 
 
 class ReshapeOp(Function):
@@ -515,13 +509,15 @@ def greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
 
 def _unbroadcast(x: Tensor, shape: TensorShape) -> Tensor:
     """Unbroadcast by summing (2, 3, 4, 4) -> (4, 4)"""
-    x = x.sum(axis=tuple(range(len(x.shape) - len(shape))))
-    return x.sum(
-        axis=tuple(
-            ax for ax in range(len(shape)) if x.shape[ax] != 1 and shape[ax] == 1
-        ),
-        keepdim=True,
+    leading = tuple(range(len(x.shape) - len(shape)))
+    if leading:
+        x = x.sum(axis=leading)
+    trailing = tuple(
+        ax for ax in range(len(shape)) if x.shape[ax] != 1 and shape[ax] == 1
     )
+    if trailing:
+        x = x.sum(axis=trailing, keepdim=True)
+    return x
 
 
 def _binary_kernel_op(
@@ -585,3 +581,18 @@ def _matmul_broadcast(
         tuple(list(bshape) + list(x2[-2:])),
         tuple(shape_out),
     )
+
+
+def _broadcast_axis(axis: int | TensorShape | None, x: Tensor) -> TensorShape:
+    if isinstance(axis, int):
+        axis = (axis,)
+    if axis is None or len(axis) == 0:
+        axis = tuple(range(x.ndim))
+    axis = tuple(ax + x.ndim if ax < 0 else ax for ax in axis)
+    if any(not isinstance(ax, int) for ax in axis):
+        raise TypeError(f"Invalid axis: {axis}")
+    if len(set(axis)) != len(axis):
+        raise ValueError(f"Redundant axes: {axis}")
+    if any(ax < 0 or ax >= x.ndim for ax in axis):
+        raise IndexError(f"Invalid axis: {axis}")
+    return axis

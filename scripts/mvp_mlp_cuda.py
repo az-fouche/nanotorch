@@ -10,9 +10,9 @@ N_FEATURES = 8
 HIDDEN_SIZE = 256
 N_EPOCH = 50
 BATCH_SIZE = 1024
-LR = 1e-4
+LR = 2e-4
 
-device = "cpu"  # "cuda" if nt.is_cuda_available() else "cpu"
+device = "cuda" if nt.is_cuda_available() else "cpu"
 
 
 def main():

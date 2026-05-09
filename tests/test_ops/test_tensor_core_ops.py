@@ -51,6 +51,11 @@ def test_tensor_sum(input, expected):
     assert result.tolist() == expected
 
 
+def test_tensor_sum_empty_is_all():
+    x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    assert x.sum(axis=()).tolist() == 45
+
+
 def test_tensor_sum_transpose():
     x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     assert x.sum().tolist() == x.T.sum().tolist()
@@ -64,6 +69,12 @@ def test_tensor_sum_1d_intindex_slice():
 def test_tensor_sum_2d_intindex_slice():
     x = nt.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
     assert x[1].sum().tolist() == 15
+
+
+def test_tensor_sum_backward_non_leading_axis():  # See #37
+    x = nt.arange(60, requires_grad=True).reshape(3, 4, 5)
+    y = x.sum(axis=1).sum()
+    y.backward()
 
 
 @requires_cuda
@@ -384,6 +395,12 @@ def test_tensor_mean_non_float_dtype_kwarg_raises():
     x = nt.tensor([1.0, 2.0, 3.0])
     with pytest.raises((TypeError, ValueError)):
         x.mean(dtype=nt.int32)
+
+
+def test_tensor_mean_backward_non_leading_axis():  # See #37
+    x = nt.arange(60, dtype=nt.float32, requires_grad=True).reshape(3, 4, 5)
+    y = x.mean(axis=1).sum()
+    y.backward()
 
 
 # Equals
