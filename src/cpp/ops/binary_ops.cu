@@ -5,7 +5,7 @@ template <class T, class O, class F>
 std::shared_ptr<Storage> _cpu_binary_op_generic(const TensorView &x1,
                                                 const TensorView &x2, F &&func,
                                                 Dtype out_dtype) {
-  auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
+  auto ndim = static_cast<py::ssize_t>(x1.shape.size());
   auto numel = numel_from_shape(x1.shape);
   auto *ptr_in1 = static_cast<const T *>(x1.storage->data());
   auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
@@ -111,7 +111,7 @@ std::shared_ptr<Storage> pw_greater_eq(const TensorView &x1,
   return _dispatch_binary<DispatchAll>(x1, x2, PwGreaterEqOp(), Dtype::Bool);
 }
 
-void bind_binary_ops_(py::module &m) {
+void bind_binary_ops_(py::module_ &m) {
   m.def("add", &add, "Add elements pointwise.", py::arg("x1"), py::arg("x2"));
   m.def("subtract", &subtract, "Subtract elements pointwise.", py::arg("x1"),
         py::arg("x2"));

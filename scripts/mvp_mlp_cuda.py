@@ -1,7 +1,6 @@
 """End-to-end MLP fitting with CUDA support."""
 
 import argparse
-import time
 
 import tqdm
 

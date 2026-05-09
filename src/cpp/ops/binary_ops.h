@@ -13,4 +13,4 @@ std::shared_ptr<Storage> pw_greater(const TensorView &a, const TensorView &b);
 std::shared_ptr<Storage> pw_greater_eq(const TensorView &a,
                                        const TensorView &b);
 
-void bind_binary_ops_(py::module &m);
+void bind_binary_ops_(py::module_ &m);

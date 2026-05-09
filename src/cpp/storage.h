@@ -104,7 +104,7 @@ public:
       throw py::type_error("Unknown scalar type.");
   }
 
-  template <typename T> T item() const {
+  template <class T> T item() const {
     return std::visit([](auto v) { return static_cast<T>(v); }, data_);
   }
   Dtype dtype() const {

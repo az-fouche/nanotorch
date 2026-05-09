@@ -13,4 +13,4 @@ std::shared_ptr<Storage> pow(const TensorView &x, Scalar value);
 std::shared_ptr<Storage> relu(const TensorView &x);
 std::shared_ptr<Storage> neg(const TensorView &x);
 
-void bind_unary_ops_(py::module &m);
+void bind_unary_ops_(py::module_ &m);

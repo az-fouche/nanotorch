@@ -10,7 +10,7 @@
 
 namespace py = pybind11;
 
-template <typename T> std::string vec_to_string(const std::vector<T> &v) {
+template <class T> std::string vec_to_string(const std::vector<T> &v) {
   std::ostringstream oss;
   oss << "[";
   for (size_t i = 0; i < v.size(); ++i) {
@@ -23,9 +23,9 @@ template <typename T> std::string vec_to_string(const std::vector<T> &v) {
 }
 
 inline py::ssize_t numel_from_shape(const std::vector<py::ssize_t> &shape) {
-  auto n_axes = static_cast<py::ssize_t>(shape.size());
+  auto ndim = static_cast<py::ssize_t>(shape.size());
   py::ssize_t numel = 1;
-  for (py::ssize_t i = 0; i < n_axes; ++i)
+  for (py::ssize_t i = 0; i < ndim; ++i)
     numel *= shape[i];
   return numel;
 }

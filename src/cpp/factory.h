@@ -21,4 +21,4 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start,
 void manual_seed(uint64_t seed);
 std::shared_ptr<Storage> uniform(py::ssize_t n, Dtype dtype, Device device);
 
-void bind_factory_(py::module &m);
+void bind_factory_(py::module_ &m);

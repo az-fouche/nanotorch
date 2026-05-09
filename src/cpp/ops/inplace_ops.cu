@@ -5,7 +5,7 @@
 
 template <class T, class Op>
 void _cpu_inplace_apply(TensorView &out, const TensorView &other, Op op) {
-  auto n_axes = static_cast<py::ssize_t>(out.shape.size());
+  auto ndim = static_cast<py::ssize_t>(out.shape.size());
   auto numel = numel_from_shape(out.shape);
   auto *ptr_other = static_cast<const T *>(other.storage->data());
   auto *ptr_out = static_cast<T *>(out.storage->data());
@@ -43,7 +43,7 @@ void _dispatch_inplace_apply(TensorView &out, const TensorView &other, Op op) {
   _require_same_device(out.storage, other.storage, "_dispatch_inplace_apply");
   _require_same_dtype(out.storage, other.storage, "_dispatch_inplace_apply");
   _require_same_shape(out, other, "_dispatch_inplace_apply");
-  Dispatch::run(out.storage->dtype(), [&]<typename T>() {
+  Dispatch::run(out.storage->dtype(), [&]<class T>() {
     switch (out.storage->device()) {
     case Device::Cpu:
       _cpu_inplace_apply<T>(out, other, op);

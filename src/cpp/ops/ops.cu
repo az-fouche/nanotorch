@@ -9,9 +9,9 @@ bool equals(const TensorView &x1, const TensorView &x2) {
   _require_same_shape(x1, x2, "equals");
   _require_same_dtype(x1.storage, x2.storage, "equals");
   _require_same_device(x1.storage, x2.storage, "equals");
-  auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
+  auto ndim = static_cast<py::ssize_t>(x1.shape.size());
   auto numel = numel_from_shape(x1.shape);
-  return DispatchAll::run(x1.storage->dtype(), [&]<typename T>() {
+  return DispatchAll::run(x1.storage->dtype(), [&]<class T>() {
     auto *ptr_in1 = static_cast<const T *>(x1.storage->data());
     auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
     for (py::ssize_t i = 0; i < numel; ++i) {
@@ -52,7 +52,7 @@ void scatter_to_axes(const TensorView &src, const TensorView &out,
   auto loc_src = std::vector<py::ssize_t>(src_ndim);
   auto loc_out_basic = std::vector<py::ssize_t>(out_ndim);
   auto loc_out_ind = std::vector<py::ssize_t>(ind_ndim);
-  DispatchAll::run(out.storage->dtype(), [&]<typename T>() {
+  DispatchAll::run(out.storage->dtype(), [&]<class T>() {
     auto out_data = static_cast<T *>(out.storage->data());
     auto src_data = static_cast<const T *>(src.storage->data());
     for (py::ssize_t idx = 0; idx < numel; ++idx) {
@@ -132,7 +132,7 @@ gather_from_axes(const TensorView &x, const std::vector<py::ssize_t> &new_shape,
   auto loc_out = std::vector<py::ssize_t>(out_ndim);
   auto loc_src_basic = std::vector<py::ssize_t>(src_ndim);
   auto loc_ind = std::vector<py::ssize_t>(ind_ndim);
-  return DispatchAll::run(x.storage->dtype(), [&]<typename T>() {
+  return DispatchAll::run(x.storage->dtype(), [&]<class T>() {
     auto old_data = static_cast<const T *>(x.storage->data());
     auto new_data = static_cast<T *>(new_storage->data());
     for (py::ssize_t idx_out = 0; idx_out < numel; ++idx_out) {
@@ -208,7 +208,7 @@ void copy_view(const TensorView &src, const TensorView &out) {
   _require_same_device(src.storage, out.storage, "copy_view");
   _require_same_dtype(src.storage, out.storage, "copy_view");
   _require_same_shape(src, out, "copy_view");
-  DispatchAll::run(out.storage->dtype(), [&]<typename T>() {
+  DispatchAll::run(out.storage->dtype(), [&]<class T>() {
     auto *ptr_src = static_cast<const T *>(src.storage->data());
     auto *ptr_out = static_cast<T *>(out.storage->data());
     switch (src.storage->device()) {
@@ -225,11 +225,11 @@ void copy_view(const TensorView &src, const TensorView &out) {
 std::shared_ptr<Storage> clone_contiguous_view_from(const TensorView &x) {
   auto storage_out = Storage::allocate(numel_from_shape(x.shape),
                                        x.storage->dtype(), x.storage->device());
-  auto n_axes = x.shape.size();
-  std::vector<py::ssize_t> out_strides(n_axes);
-  if (n_axes > 0)
-    out_strides[n_axes - 1] = 1;
-  for (py::ssize_t j = n_axes - 2; j >= 0; --j)
+  auto ndim = x.shape.size();
+  std::vector<py::ssize_t> out_strides(ndim);
+  if (ndim > 0)
+    out_strides[ndim - 1] = 1;
+  for (py::ssize_t j = ndim - 2; j >= 0; --j)
     out_strides[j] = x.shape[j + 1] * out_strides[j + 1];
   auto view_out = TensorView(storage_out, x.shape, out_strides, 0);
   copy_view(x, view_out);

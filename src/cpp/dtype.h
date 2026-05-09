@@ -20,7 +20,7 @@ inline constexpr py::ssize_t SIZEOF_FLOAT64 = 8;
 
 enum class Dtype : uint8_t { Bool, Int32, Int64, Float32, Float64 };
 
-template <typename F> auto dispatch_dtype(Dtype dtype, F &&func) {
+template <class F> auto dispatch_dtype(Dtype dtype, F &&func) {
   switch (dtype) {
   case Dtype::Bool:
     return func.template operator()<bool>();
@@ -42,7 +42,7 @@ struct DispatchAll {
   }
 };
 
-template <typename F> auto dispatch_dtype_float(Dtype dtype, F &&func) {
+template <class F> auto dispatch_dtype_float(Dtype dtype, F &&func) {
   switch (dtype) {
   case Dtype::Float32:
     return func.template operator()<float>();
@@ -58,7 +58,7 @@ struct DispatchFloat {
   }
 };
 
-template <typename F> auto dispatch_dtype_arithmetic(Dtype dtype, F &&func) {
+template <class F> auto dispatch_dtype_arithmetic(Dtype dtype, F &&func) {
   switch (dtype) {
   case Dtype::Int32:
     return func.template operator()<int32_t>();

@@ -56,11 +56,11 @@ std::shared_ptr<Storage> sum(const TensorView &x,
                              const std::vector<py::ssize_t> &axis_drop,
                              Dtype dtype) {
   // Compute both shapes
-  auto n_axes = static_cast<py::ssize_t>(axis_drop.size());
+  auto ndim = static_cast<py::ssize_t>(axis_drop.size());
   auto ndim_in = static_cast<py::ssize_t>(x.shape.size());
-  auto ndim_out = static_cast<py::ssize_t>(ndim_in - n_axes);
+  auto ndim_out = static_cast<py::ssize_t>(ndim_in - ndim);
   auto axis_keep = std::vector<py::ssize_t>(ndim_out);
-  auto shape_drop = std::vector<py::ssize_t>(n_axes);
+  auto shape_drop = std::vector<py::ssize_t>(ndim);
   auto shape_keep = std::vector<py::ssize_t>(ndim_out);
   py::ssize_t posd = 0, posk = 0;
   for (py::ssize_t p = 0; p < ndim_in; ++p)
@@ -87,8 +87,8 @@ std::shared_ptr<Storage> sum(const TensorView &x,
     view_drop.strides[p] = x.strides[axis_drop[p]];
   }
 
-  return DispatchAll::run(x.storage->dtype(), [&]<typename T>() {
-    return DispatchArithmetic::run(dtype, [&]<typename O>() {
+  return DispatchAll::run(x.storage->dtype(), [&]<class T>() {
+    return DispatchArithmetic::run(dtype, [&]<class O>() {
       switch (x.storage->device()) {
       case Device::Cpu:
         return _cpu_sum<T, O>(x, dtype, view_keep, view_drop, numel_keep,
@@ -168,7 +168,7 @@ std::shared_ptr<Storage> log(const TensorView &x) {
   return _dispatch_unary<DispatchFloat>(x, LogOp());
 }
 
-template <typename T> __host__ __device__ T int_pow(T a, T n) {
+template <class T> __host__ __device__ T int_pow(T a, T n) {
   T r = 1;
   while (n > 0) {
     if (n & 1)
@@ -178,7 +178,7 @@ template <typename T> __host__ __device__ T int_pow(T a, T n) {
   }
   return r;
 }
-template <typename T> struct PowOp {
+template <class T> struct PowOp {
   T value;
   __host__ __device__ T operator()(T a) const {
     if constexpr (std::is_integral_v<T>)
@@ -211,7 +211,7 @@ std::shared_ptr<Storage> relu(const TensorView &x) {
   return _dispatch_unary<DispatchArithmetic>(x, ReluOp());
 }
 
-void bind_unary_ops_(py::module &m) {
+void bind_unary_ops_(py::module_ &m) {
   m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"),
         py::arg("axis"), py::arg("dtype"));
   m.def(

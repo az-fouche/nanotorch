@@ -119,7 +119,7 @@ std::shared_ptr<Storage> matmul(const TensorView &x1, const TensorView &x2) {
   out_shape[ndim - 2] = lsize;
   out_shape[ndim - 1] = rsize;
 
-  return dispatch_dtype_arithmetic(x1.storage->dtype(), [&]<typename T>() {
+  return dispatch_dtype_arithmetic(x1.storage->dtype(), [&]<class T>() {
     switch (x1.storage->device()) {
     case Device::Cpu:
       return _cpu_matmul<T>(x1, x2, ndim, out_shape, csize);

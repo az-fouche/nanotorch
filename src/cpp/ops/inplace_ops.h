@@ -12,4 +12,4 @@ void mul_inplace(TensorView &out, const TensorView &other);
 void div_inplace(TensorView &out, const TensorView &other);
 void copy_inplace(TensorView &out, const TensorView &other);
 
-void bind_inplace_ops_(py::module &m);
+void bind_inplace_ops_(py::module_ &m);

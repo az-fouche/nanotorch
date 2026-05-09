@@ -17,7 +17,7 @@ inline void launch_1d(py::ssize_t n, Kernel kernel, Args... args) {
 }
 
 struct TensorViewStatic {
-  size_t n_axes;
+  size_t ndim;
   py::ssize_t offset;
   py::ssize_t shape[NT_MAX_DIMS];
   py::ssize_t strides[NT_MAX_DIMS];
@@ -25,7 +25,7 @@ struct TensorViewStatic {
 __host__ __device__ inline py::ssize_t unravel(py::ssize_t i,
                                                TensorViewStatic view) {
   py::ssize_t idx = view.offset;
-  for (int j = view.n_axes - 1; j >= 0; --j) {
+  for (int j = view.ndim - 1; j >= 0; --j) {
     auto coord = i % view.shape[j];
     i /= view.shape[j];
     idx += coord * view.strides[j];

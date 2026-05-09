@@ -15,7 +15,7 @@ std::shared_ptr<Storage> Storage::from_iterable(py::sequence values,
                                                 Dtype dtype, Device device) {
   py::size_t size = py::len(values);
   auto storage = Storage::allocate(size, dtype, Device::Cpu);
-  DispatchAll::run(dtype, [&]<typename T>() {
+  DispatchAll::run(dtype, [&]<class T>() {
     auto *data_loc = static_cast<T *>(storage->data());
     for (py::size_t i = 0; i < size; ++i)
       data_loc[i] = values[i].cast<T>();
@@ -51,8 +51,8 @@ std::shared_ptr<Storage> Storage::cast(Dtype target) const {
   if (device() == Device::Cuda)
     return to(Device::Cpu)->cast(target)->to(Device::Cuda); // FIXME(#11)
   auto new_storage = Storage::allocate(size(), target, device());
-  DispatchAll::run(dtype(), [&]<typename Src>() {
-    DispatchAll::run(target, [&]<typename Dst>() {
+  DispatchAll::run(dtype(), [&]<class Src>() {
+    DispatchAll::run(target, [&]<class Dst>() {
       auto *s = static_cast<const Src *>(data());
       auto *d = static_cast<Dst *>(new_storage->data());
       for (py::ssize_t i = 0; i < size(); ++i)
