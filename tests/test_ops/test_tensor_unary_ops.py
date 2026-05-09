@@ -140,3 +140,26 @@ def test_cuda_result_view(op, allow_neg):
         result_cuda = op(x)
         assert result_cuda.device == nt.Device.Cuda
         testing.assert_allclose(result_cpu, result_cuda.cpu())
+
+
+@pytest.mark.parametrize(
+    "nt_op, math_op",
+    [
+        (nt.exp, math.exp),
+        (nt.log, math.log),
+        (nt.sqrt, math.sqrt),
+        (nt.tanh, math.tanh),
+        (nt.sigmoid, lambda x: 1 / (1 + math.exp(-x))),
+        (lambda ts: -ts, lambda x: -x),
+        (nt.relu, lambda x: 0 if x <= 0 else x),
+        (lambda x: nt.pow(x, 3.14), lambda x: math.pow(x, 3.14)),
+        (lambda x: nt.pow(x, -3.14), lambda x: math.pow(x, -3.14)),
+        (lambda x: nt.pow(x, 0), lambda x: math.pow(x, 0)),
+    ],
+)
+def test_unary_math_ops(nt_op, math_op):
+    nt.manual_seed(42)
+    x = nt.rand(50, dtype=nt.float64) + 0.5
+    y_nt = nt_op(x)
+    y_math = nt.tensor([math_op(it) for it in x.tolist()], dtype=nt.float64)  # type: ignore
+    testing.assert_allclose(y_nt, y_math, tol=1e-4)

@@ -44,8 +44,11 @@ from .ops import (
     pow,
     relu,
     reshape,
+    sigmoid,
+    sqrt,
     subtract,
     sum,
+    tanh,
     transpose,
 )
 
@@ -84,8 +87,11 @@ __all__ = [
     "rand",
     "relu",
     "reshape",
+    "sigmoid",
+    "sqrt",
     "subtract",
     "sum",
+    "tanh",
     "tensor",
     "transpose",
     "zeros",

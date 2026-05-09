@@ -10,11 +10,25 @@ nt.manual_seed(42)
 
 
 @pytest.mark.parametrize(
-    "op", [ag.SumOp, ag.MeanOp, ag.NegOp, ag.ExpOp, ag.TOp, ag.ReluOp]
+    "op",
+    [
+        ag.SumOp,
+        ag.MeanOp,
+        ag.NegOp,
+        ag.ExpOp,
+        ag.TOp,
+        ag.ReluOp,
+        ag.SigmoidOp,
+        ag.TanhOp,
+        ag.SqrtOp,
+    ],
 )
 @pytest.mark.parametrize("x", [nt.rand(3), nt.rand(3, 4), nt.rand(3, 1, 4)])
 def test_gradcheck_unary_ops(op: type[ag.Function], x: nt.Tensor):
-    x = x.to(nt.float64) - 0.5
+    if op is ag.SqrtOp:
+        x = x.to(nt.float64)
+    else:
+        x = x.to(nt.float64) - 0.5
     x.enable_grad()
     testing.gradcheck(op, x)
 

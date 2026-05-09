@@ -126,3 +126,18 @@ def pow(x: Tensor, exponent: Tensor | float | int | bool) -> Tensor:
 @inherit_doc(autograd.ReluOp)
 def relu(x: Tensor) -> Tensor:
     return autograd.ReluOp.apply(x)
+
+
+@inherit_doc(autograd.TanhOp)
+def tanh(x: Tensor) -> Tensor:
+    return autograd.TanhOp.apply(x)
+
+
+@inherit_doc(autograd.SqrtOp)
+def sqrt(x: Tensor) -> Tensor:
+    return autograd.SqrtOp.apply(x)
+
+
+@inherit_doc(autograd.SigmoidOp)
+def sigmoid(x: Tensor) -> Tensor:
+    return autograd.SigmoidOp.apply(x)

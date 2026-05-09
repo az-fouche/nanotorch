@@ -211,6 +211,21 @@ std::shared_ptr<Storage> relu(const TensorView &x) {
   return _dispatch_unary<DispatchArithmetic>(x, ReluOp());
 }
 
+DEFINE_UNARY(Sqrt, std::sqrt(a))
+std::shared_ptr<Storage> sqrt(const TensorView &x) {
+  return _dispatch_unary<DispatchArithmetic>(x, SqrtOp());
+}
+
+DEFINE_UNARY(Tanh, std::tanh(a))
+std::shared_ptr<Storage> tanh(const TensorView &x) {
+  return _dispatch_unary<DispatchArithmetic>(x, TanhOp());
+}
+
+DEFINE_UNARY(Sigmoid, 1.0 / (1.0 + std::exp(-a)))
+std::shared_ptr<Storage> sigmoid(const TensorView &x) {
+  return _dispatch_unary<DispatchArithmetic>(x, SigmoidOp());
+}
+
 void bind_unary_ops_(py::module_ &m) {
   m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"),
         py::arg("axis"), py::arg("dtype"));
@@ -225,4 +240,11 @@ void bind_unary_ops_(py::module_ &m) {
       "Component-wise power.", py::arg("x"), py::arg("a"));
   m.def("neg", &neg, "Component-wise negation.", py::arg("x"));
   m.def("relu", &relu, "Rectified linear unit.", py::arg("x"));
+  m.def(
+      "sqrt", [](const TensorView &x) { return sqrt(x); },
+      "Rectified linear unit.", py::arg("x"));
+  m.def(
+      "tanh", [](const TensorView &x) { return tanh(x); },
+      "Rectified linear unit.", py::arg("x"));
+  m.def("sigmoid", &sigmoid, "Rectified linear unit.", py::arg("x"));
 }

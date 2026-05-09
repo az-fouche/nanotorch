@@ -1,7 +1,7 @@
 """Usual differentiable tensor operations and their derivative."""
 
 import math
-from typing import Any, Callable
+from typing import Callable
 
 from nanotorch import _C
 from nanotorch._data_type import Dtype, promote_dtypes
@@ -223,6 +223,90 @@ class LogOp(Function):
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (grad_out * self.saved_tensors[0] ** -1,)
+
+
+class SqrtOp(Function):
+    """Square root of all tensor coefficients.
+
+    Parameters
+    ----------
+    x: Tensor
+        Target tensor to apply square root.
+
+    Returns
+    -------
+    Tensor
+        Sqrt tensor, cast to floating point if necessary.
+    """
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.is_empty:
+            return x
+        dtype = promote_dtypes(x.dtype, Dtype.Float32)
+        x = x.to(dtype)
+        sqrt_x = Tensor._new_contiguous(_C.sqrt(x._C_view), x.shape)
+        self.save_for_backward(sqrt_x)
+        return sqrt_x
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        sqrt_x = self.saved_tensors[0]
+        return (grad_out * 0.5 * sqrt_x**-1,)
+
+
+class TanhOp(Function):
+    """Tanh of all tensor coefficients.
+
+    Parameters
+    ----------
+    x: Tensor
+        Target tensor to apply tanh.
+
+    Returns
+    -------
+    Tensor
+        Tanh tensor, cast to floating point if necessary.
+    """
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.is_empty:
+            return x
+        dtype = promote_dtypes(x.dtype, Dtype.Float32)
+        x = x.to(dtype)
+        tanh_x = Tensor._new_contiguous(_C.tanh(x._C_view), x.shape)
+        self.save_for_backward(tanh_x)
+        return tanh_x
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        tanh_x = self.saved_tensors[0]
+        return (grad_out * (1 - tanh_x**2),)
+
+
+class SigmoidOp(Function):
+    """Sigmoid of all tensor coefficients.
+
+    Parameters
+    ----------
+    x: Tensor
+        Target tensor to apply sigmoid.
+
+    Returns
+    -------
+    Tensor
+        Sigmoid tensor, cast to floating point if necessary.
+    """
+
+    def forward(self, x: Tensor) -> Tensor:
+        if x.is_empty:
+            return x
+        dtype = promote_dtypes(x.dtype, Dtype.Float32)
+        x = x.to(dtype)
+        sig_x = Tensor._new_contiguous(_C.sigmoid(x._C_view), x.shape)
+        self.save_for_backward(sig_x)
+        return sig_x
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        sig_x = self.saved_tensors[0]
+        return (grad_out * sig_x * (1 - sig_x),)
 
 
 class PowOp(Function):
