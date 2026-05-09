@@ -209,7 +209,7 @@ class Tensor:
 
         if is_contiguous_view(index):
             try:
-                value = value.expand(view.shape)
+                value = value.expand(*view.shape)
             except ValueError as e:
                 raise IndexError(str(e)) from e
             if value._storage is self.storage:  # aliasing guard
@@ -224,7 +224,7 @@ class Tensor:
 
         fax = _FancyAxes.compute(view.shape, new_index)
         try:
-            value = value.expand(fax.new_shape)
+            value = value.expand(*fax.new_shape)
         except ValueError as e:
             raise IndexError(str(e)) from e
         if value._storage is self.storage:  # aliasing guard
@@ -283,9 +283,9 @@ class Tensor:
     def T(self) -> Tensor:
         """Returns a transposed view (no copy)."""
         # workaround for runtime binding of @property
-        from .autograd import TransposeOp
+        from .autograd import TOp
 
-        return TransposeOp.apply(self)
+        return TOp.apply(self)
 
     @property
     def version(self) -> int:
@@ -335,70 +335,6 @@ class Tensor:
         if self._is_contiguous(full_span=True):
             return Tensor._new_contiguous(self.storage.clone(), self.shape)
         return self._to_contiguous(force=True)
-
-    def reshape(self, *dims: int) -> Tensor: ...
-
-    def transpose(self, dim0: int, dim1: int) -> Tensor:
-        """Permutes two tensor dimensions (does not copy).
-
-        Parameters
-        ----------
-        x: Tensor
-            Tensor to transpose.
-        dim0: int
-            Index of the first dimension to permute.
-        dim1:
-            Index of the second dimension to permute.
-
-        Returns
-        -------
-            Tensor view with swapped dimensions.
-        """
-        if len(self.shape) < 2:
-            return self
-        if dim0 == dim1:
-            return self
-        shape, strides = list(self.shape), list(self._strides)
-        shape[dim0], shape[dim1], strides[dim0], strides[dim1] = (
-            shape[dim1],
-            shape[dim0],
-            strides[dim1],
-            strides[dim0],
-        )
-        return Tensor._new_view(
-            self.storage,
-            shape=tuple(shape),
-            strides=tuple(strides),
-            offset=self._offset,
-        )
-
-    def expand(self, shape: TensorShape) -> Tensor:
-        """Expand the tensor to target shape, no copy.
-
-        Parameters
-        ----------
-        shape: tuple[int, ...]
-            Shape to expand the tensor to, last dimensions must match the tensor
-            dimension. If tensor dimension self.shape[i] is 1, it is broadcasted to
-            shape[i].
-        """
-        if len(shape) < self.ndim:
-            raise ValueError(f"Cannot broadcast {self.shape} to {shape}.")
-        strides = list(self._strides)
-        for i in range(len(shape)):
-            if i >= self.ndim:
-                strides = [0] + strides
-            else:
-                src, tgt = self.shape[-i - 1], shape[-i - 1]
-                if src == tgt:
-                    continue
-                elif src == 1:
-                    strides[-i - 1] = 0  # broadcast
-                else:
-                    raise ValueError(
-                        f"Cannot broadcast {self.shape} to {shape} (mismatch)."
-                    )
-        return Tensor._new_view(self.storage, shape, tuple(strides), self._offset)
 
     def flatten(self) -> Tensor:
         """Flattens into a 1D tensor, (2, 2, 2) -> (8,).
@@ -523,6 +459,9 @@ class Tensor:
         *,
         dtype: Dtype | None = None,
     ) -> Tensor: ...
+    def reshape(self, *dims: int) -> Tensor: ...
+    def transpose(self, dim0: int, dim1: int) -> Tensor: ...
+    def expand(self, *dims: int) -> Tensor: ...
 
     # Autograd
 
@@ -769,7 +708,7 @@ class _FancyAxes:
             indarrs_raw.append(fancy_index.to(Dtype.Int64))
 
         indarr_shape = broadcast_shapes(*(t.shape for t in indarrs_raw))
-        fancy_dims_data = [t.expand(indarr_shape) for t in indarrs_raw]
+        fancy_dims_data = [t.expand(*indarr_shape) for t in indarrs_raw]
 
         # compute new shape and axes plan
         nfancy = len(fancy_dims_in_src)

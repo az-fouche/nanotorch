@@ -1,3 +1,5 @@
+from typing import Sequence
+
 import nanotorch as nt
 from nanotorch.autograd import Function
 
@@ -17,10 +19,19 @@ def assert_allclose(x1: nt.Tensor, x2: nt.Tensor, tol: float = 1e-6) -> None:
 
 
 def gradcheck(
-    op: type[Function], *inputs: nt.Tensor, eps: float = 1e-6, rtol: float = 1e-5
+    op: type[Function],
+    *inputs: nt.Tensor,
+    extra_args: Sequence | None = None,
+    extra_kwargs: dict | None = None,
+    eps: float = 1e-6,
+    rtol: float = 1e-5,
 ):
     """Performs gradient correctness checking for testing."""
-    out = op.apply(*inputs)
+    if extra_args is None:
+        extra_args = []
+    if extra_kwargs is None:
+        extra_kwargs = {}
+    out = op.apply(*inputs, *extra_args, **extra_kwargs)
     loss = out.sum()
     loss.backward()
 
@@ -32,9 +43,9 @@ def gradcheck(
         for i in range(x.numel):
             xi_orig = x_flat[i].item()
             x_flat[i] += eps
-            lossp = op.apply(*inputs).sum().item()
+            lossp = op.apply(*inputs, *extra_args, **extra_kwargs).sum().item()
             x_flat[i] -= 2 * eps
-            lossm = op.apply(*inputs).sum().item()
+            lossm = op.apply(*inputs, *extra_args, **extra_kwargs).sum().item()
             x_flat[i] = xi_orig
             g_anal = grad_flat[i].item()
             g_nume = (lossp - lossm) / (2 * eps)

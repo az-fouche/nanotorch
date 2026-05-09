@@ -10,7 +10,7 @@ nt.manual_seed(42)
 
 
 @pytest.mark.parametrize(
-    "op", [ag.SumOp, ag.MeanOp, ag.NegOp, ag.ExpOp, ag.TransposeOp, ag.ReluOp]
+    "op", [ag.SumOp, ag.MeanOp, ag.NegOp, ag.ExpOp, ag.TOp, ag.ReluOp]
 )
 @pytest.mark.parametrize("x", [nt.rand(3), nt.rand(3, 4), nt.rand(3, 1, 4)])
 def test_gradcheck_unary_ops(op: type[ag.Function], x: nt.Tensor):
@@ -74,6 +74,63 @@ def test_gradcheck_matmul_op(x1: nt.Tensor, x2: nt.Tensor):
     x1.enable_grad()
     x2.enable_grad()
     testing.gradcheck(ag.MatmulOp, x1, x2)
+
+
+@pytest.mark.parametrize(
+    "x,shape",
+    [
+        (nt.rand(3, 5), (15,)),
+        (nt.rand(15), (3, 5)),
+        (nt.rand(5), (5,)),
+        (nt.rand(5, 4, 1, 3), (1, 4, 5, 3)),
+    ],
+)
+def test_gradcheck_reshape_ops(x: nt.Tensor, shape: tuple[int]):
+    x = x.to(nt.float64)
+    x.enable_grad()
+    testing.gradcheck(ag.ReshapeOp, x, extra_args=shape)
+
+
+@pytest.mark.parametrize(
+    "x,shape",
+    [
+        (nt.rand(1), (3, 5, 4)),
+        (nt.rand(3, 4), (7, 5, 3, 4)),
+        (nt.rand(3, 1), (7, 5, 3, 4)),
+    ],
+)
+def test_gradcheck_expand_ops(x: nt.Tensor, shape: tuple[int]):
+    x = x.to(nt.float64)
+    x.enable_grad()
+    testing.gradcheck(ag.ExpandOp, x, extra_args=shape)
+
+
+@pytest.mark.parametrize(
+    "x",
+    [
+        (nt.rand(3, 4)),
+        (nt.rand(3, 1)),
+        (nt.rand(7, 5, 3, 4)),
+    ],
+)
+def test_gradcheck_T_ops(x: nt.Tensor):
+    x = x.to(nt.float64)
+    x.enable_grad()
+    testing.gradcheck(ag.TOp, x)
+
+
+@pytest.mark.parametrize(
+    "x,dims",
+    [
+        (nt.rand(3, 4), (0, 1)),
+        (nt.rand(3, 4, 5, 6), (0, 1)),
+        (nt.rand(3, 4, 5, 6), (1, 3)),
+    ],
+)
+def test_gradcheck_transpose_ops(x: nt.Tensor, dims: tuple[int]):
+    x = x.to(nt.float64)
+    x.enable_grad()
+    testing.gradcheck(ag.TransposeOp, x, extra_args=dims)
 
 
 def test_requires_grad_default_true():

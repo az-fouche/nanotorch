@@ -5,6 +5,7 @@ from ._data_type import Dtype, bool_, float32, float64, int32, int64
 from ._device import Device, is_cuda_available
 from .autograd import (
     AddOp,
+    ExpandOp,
     ExpOp,
     LogOp,
     MatmulOp,
@@ -15,6 +16,7 @@ from .autograd import (
     ReshapeOp,
     SubOp,
     SumOp,
+    TransposeOp,
     TrueDivOp,
     equal_op,
     greater_eq_op,
@@ -154,5 +156,7 @@ Tensor.mean = lambda self, axis=None, keepdim=False, dtype=None: MeanOp.apply(
     self, axis, keepdim, dtype
 )
 Tensor.reshape = lambda self, *dims: ReshapeOp.apply(self, *dims)
+Tensor.expand = lambda self, *dims: ExpandOp.apply(self, *dims)
+Tensor.transpose = lambda self, dim0, dim1: TransposeOp.apply(self, dim0, dim1)
 
 Tensor.__hash__ = None  # Necessary for __eq__ semantics

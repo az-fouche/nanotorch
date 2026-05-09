@@ -4,6 +4,7 @@ from .function import Function
 from .grad_mode import no_grad
 from .ops import (
     AddOp,
+    ExpandOp,
     ExpOp,
     LogOp,
     MatmulOp,
@@ -15,6 +16,7 @@ from .ops import (
     ReshapeOp,
     SubOp,
     SumOp,
+    TOp,
     TransposeOp,
     TrueDivOp,
     equal_op,
@@ -24,6 +26,7 @@ from .ops import (
 
 __all__ = [
     "AddOp",
+    "ExpandOp",
     "ExpOp",
     "Function",
     "LogOp",
@@ -36,6 +39,7 @@ __all__ = [
     "ReshapeOp",
     "SubOp",
     "SumOp",
+    "TOp",
     "TransposeOp",
     "TrueDivOp",
     "equal_op",

@@ -1,7 +1,7 @@
 """Usual differentiable tensor operations and their derivative."""
 
 import math
-from typing import Callable
+from typing import Any, Callable
 
 from nanotorch import _C
 from nanotorch._data_type import Dtype, promote_dtypes
@@ -311,7 +311,7 @@ class SumOp(Function):
             1 if dim in self._axis else self._orig_shape[dim]
             for dim in range(len(self._orig_shape))
         )
-        return (grad_out.reshape(*old_shape_dim).expand(self._orig_shape),)
+        return (grad_out.reshape(*old_shape_dim).expand(*self._orig_shape),)
 
 
 class MeanOp(Function):
@@ -360,7 +360,7 @@ class MeanOp(Function):
             for dim in range(len(self._orig_shape))
         )
         return (
-            grad_out.reshape(*old_shape_dim).expand(self._orig_shape) / self._denom,
+            grad_out.reshape(*old_shape_dim).expand(*self._orig_shape) / self._denom,
         )
 
 
@@ -398,7 +398,49 @@ class ReshapeOp(Function):
         return (grad_out.reshape(*self._shape),)
 
 
-class TransposeOp(Function):
+class ExpandOp(Function):
+    """Expand the tensor to target shape, no copy.
+
+    Parameters
+    ----------
+    x: Tensor
+        Tensor to expand.
+    dims: *int
+        Shape to expand the tensor to, last dimensions must match the tensor
+        dimension. If tensor dimension self.shape[i] is 1, it is broadcasted to
+        shape[i].
+    """
+
+    def forward(self, x: Tensor, *dims: int) -> Tensor:
+        if len(dims) < x.ndim:
+            raise ValueError(f"Cannot broadcast {x.shape} to {dims}.")
+
+        self._orig_shape = x.shape
+        if dims == x.shape:
+            return x
+
+        strides = list(x._strides)
+        for i in range(len(dims)):
+            if i >= x.ndim:
+                strides = [0] + strides
+            else:
+                src, tgt = x.shape[-i - 1], dims[-i - 1]
+                if src == tgt:
+                    continue
+                elif src == 1:
+                    strides[-i - 1] = 0  # broadcast
+                else:
+                    raise ValueError(
+                        f"Cannot broadcast {x.shape} to {dims} (mismatch)."
+                    )
+
+        return Tensor._new_view(x.storage, dims, tuple(strides), x._offset)
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor]:
+        return (_unbroadcast(grad_out, self._orig_shape),)
+
+
+class TOp(Function):
     """y = x.T operation."""
 
     def forward(self, x: Tensor) -> Tensor:
@@ -414,6 +456,49 @@ class TransposeOp(Function):
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (grad_out.T,)
+
+
+class TransposeOp(Function):
+    """Permutes two tensor dimensions (does not copy).
+
+    Parameters
+    ----------
+    x: Tensor
+        Tensor to transpose.
+    dim0: int
+        Index of the first dimension to permute.
+    dim1:
+        Index of the second dimension to permute.
+
+    Returns
+    -------
+        Tensor view with swapped dimensions.
+    """
+
+    def forward(self, x: Tensor, dim0: int, dim1: int) -> Tensor:
+        self._dim0 = dim0
+        self._dim1 = dim1
+        if len(x.shape) < 2:
+            return x
+        if dim0 == dim1:
+            return x
+        tstrides, offset = x.strides
+        shape, strides = list(x.shape), list(tstrides)
+        shape[dim0], shape[dim1], strides[dim0], strides[dim1] = (
+            shape[dim1],
+            shape[dim0],
+            strides[dim1],
+            strides[dim0],
+        )
+        return Tensor._new_view(
+            x.storage,
+            shape=tuple(shape),
+            strides=tuple(strides),
+            offset=offset,
+        )
+
+    def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
+        return (grad_out.transpose(self._dim0, self._dim1),)
 
 
 class MatmulOp(Function):
@@ -443,18 +528,18 @@ class MatmulOp(Function):
         self.save_for_backward(x1, x2)
         self._shape1, self._shape2, shape_out = _matmul_broadcast(x1.shape, x2.shape)
         dtype = promote_dtypes(x1.dtype, x2.dtype)
-        x1 = x1.to(dtype).expand(self._shape1)
+        x1 = x1.to(dtype).expand(*self._shape1)
         if x2.ndim == 1 and self._shape2[-2:] == (x2.shape[0], 1):
             x2 = x2.reshape(x2.shape[0], 1)  # Cannot expand to the right
-        x2 = x2.to(dtype).expand(self._shape2)
+        x2 = x2.to(dtype).expand(*self._shape2)
         return Tensor._new_contiguous(_C.matmul(x1._C_view, x2._C_view), shape_out)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         x1, x2 = self.saved_tensors
-        x1_m = x1.expand(self._shape1)
+        x1_m = x1.expand(*self._shape1)
         if x2.ndim == 1 and self._shape2[-2:] == (x2.shape[0], 1):
             x2 = x2.reshape(x2.shape[0], 1)
-        x2_m = x2.expand(self._shape2)
+        x2_m = x2.expand(*self._shape2)
         grad_out = grad_out.reshape(
             *broadcast_shapes(self._shape1[:-2], self._shape2[:-2]),
             self._shape1[-2],
@@ -486,24 +571,24 @@ class ReluOp(Function):
 def equal_op(x1: Tensor, x2: Tensor) -> Tensor:
     dtype = promote_dtypes(x1.dtype, x2.dtype)
     shape = broadcast_shapes(x1.shape, x2.shape)
-    x1 = x1.to(dtype).expand(shape)
-    x2 = x2.to(dtype).expand(shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
     return Tensor._new_contiguous(_C.pw_equal(x1._C_view, x2._C_view), x1.shape)
 
 
 def greater_op(x1: Tensor, x2: Tensor) -> Tensor:
     dtype = promote_dtypes(x1.dtype, x2.dtype)
     shape = broadcast_shapes(x1.shape, x2.shape)
-    x1 = x1.to(dtype).expand(shape)
-    x2 = x2.to(dtype).expand(shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
     return Tensor._new_contiguous(_C.pw_greater(x1._C_view, x2._C_view), x1.shape)
 
 
 def greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
     dtype = promote_dtypes(x1.dtype, x2.dtype)
     shape = broadcast_shapes(x1.shape, x2.shape)
-    x1 = x1.to(dtype).expand(shape)
-    x2 = x2.to(dtype).expand(shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
     return Tensor._new_contiguous(_C.pw_greater_eq(x1._C_view, x2._C_view), x1.shape)
 
 
@@ -541,8 +626,8 @@ def _binary_kernel_op(
         shape = broadcast_shapes(x1.shape, x2.shape)
 
     out_is_x1 = out is x1  # save before rebind
-    x1 = x1.to(dtype).expand(shape)
-    x2 = x2.to(dtype).expand(shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
 
     if out is None:
         return Tensor._new_contiguous(op(x1._C_view, x2._C_view), shape)
