@@ -47,7 +47,7 @@ __global__ void _inplace_apply_kernel(
 }
 
 template <class T, class Op>
-std::shared_ptr<Storage> _cuda_inplace_apply(
+void _cuda_inplace_apply(
     const TensorView& out, const TensorView& other, Op op
 ) {
     auto n = numel_from_shape(out.shape);
