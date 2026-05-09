@@ -13,13 +13,16 @@
 #include "ops/cuda.h"
 #include "dtype.h"
 
+[[noreturn]] inline void nt_unreachable() {
 #if defined(_MSC_VER) && !defined(__clang__)
-    #define NT_UNREACHABLE() __assume(false)
+    __assume(false);
 #elif defined(__GNUC__) || defined(__clang__)
-    #define NT_UNREACHABLE() __builtin_unreachable()
+    __builtin_unreachable();
 #else
-    #define NT_UNREACHABLE() std::abort()
+    std::abort();
 #endif
+}
+#define NT_UNREACHABLE() nt_unreachable()
 
 namespace py = pybind11;
 
@@ -104,8 +107,7 @@ public:
             case 1: return Dtype::Int64; 
             case 2: return Dtype::Float64;
             default: NT_UNREACHABLE();
-        } 
-        return {};
+        }
     }
 private:
     std::variant<bool, int64_t, double> data_;

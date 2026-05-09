@@ -1,43 +1,38 @@
 #include "binary_ops.h"
 #include "cuda.cuh"
 
-template <typename Dispatch, typename F>
+template <class T, class O, class F>
 std::shared_ptr<Storage> _cpu_binary_op_generic(
     const TensorView& x1, 
     const TensorView& x2, 
     F&& func, 
-    std::optional<Dtype> out_dtype = std::nullopt
+    Dtype out_dtype
 ) {
     auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
     auto numel = numel_from_shape(x1.shape);
-    auto eff_dtype = out_dtype.value_or(x1.storage->dtype());
-    auto new_storage = Storage::allocate(numel, eff_dtype, x1.storage->device());
-    return Dispatch::run(eff_dtype, [&]<typename O>() {
-        return Dispatch::run(x1.storage->dtype(), [&]<typename T>() {
-            auto* ptr1 = static_cast<const T*>(x1.storage->data());
-            auto* ptr2 = static_cast<const T*>(x2.storage->data());
-            auto* ptrout = static_cast<O*>(new_storage->data());
-            std::vector<py::ssize_t> loc(n_axes);
-            for (py::ssize_t i = 0; i < numel; ++i) {
-                py::ssize_t idx1 = x1.offset, idx2 = x2.offset;
-                for (py::ssize_t j = 0; j < n_axes; ++j) {
-                    idx1 += x1.strides[j] * loc[j];
-                    idx2 += x2.strides[j] * loc[j];
-                }
-                ptrout[i] = static_cast<O>(func(ptr1[idx1], ptr2[idx2]));
+    auto new_storage = Storage::allocate(numel, out_dtype, x1.storage->device());
+    auto* ptr1 = static_cast<const T*>(x1.storage->data());
+    auto* ptr2 = static_cast<const T*>(x2.storage->data());
+    auto* ptr_out = static_cast<O*>(new_storage->data());
+    std::vector<py::ssize_t> loc(n_axes);
+    for (py::ssize_t i = 0; i < numel; ++i) {
+        py::ssize_t idx1 = x1.offset, idx2 = x2.offset;
+        for (py::ssize_t j = 0; j < n_axes; ++j) {
+            idx1 += x1.strides[j] * loc[j];
+            idx2 += x2.strides[j] * loc[j];
+        }
+        ptr_out[i] = static_cast<O>(func(ptr1[idx1], ptr2[idx2]));
 
-                // Loc update
-                py::ssize_t j = n_axes - 1;
-                while (j >= 0) { 
-                    loc[j] += 1;
-                    if (loc[j] < x1.shape[j]) break;
-                    loc[j] = 0;
-                    j -= 1;
-                }
-            }
-            return new_storage;
-        });
-    });
+        // Loc update
+        py::ssize_t j = n_axes - 1;
+        while (j >= 0) { 
+            loc[j] += 1;
+            if (loc[j] < x1.shape[j]) break;
+            loc[j] = 0;
+            j -= 1;
+        }
+    }
+    return new_storage;
 }
 
 template <class TIn, class TOut, class Op>
@@ -57,31 +52,26 @@ __global__ void _binary_kernel(
     out[i] = static_cast<TOut>(op(in_a[idx_a], in_b[idx_b]));
 }
 
-template <class Dispatch, class Op>
+template <class T, class O, class Op>
 std::shared_ptr<Storage> _cuda_binary_op_generic(
     const TensorView& a, 
     const TensorView& b,
     Op op,
-    std::optional<Dtype> out_dtype = std::nullopt
+    Dtype out_dtype
 ) {
     auto n = numel_from_shape(a.shape);
-    auto eff_dtype = out_dtype.value_or(a.storage->dtype());
-    auto out = Storage::allocate(n, eff_dtype, Device::Cuda);
-    Dispatch::run(eff_dtype, [&]<class O>() {
-        Dispatch::run(a.storage->dtype(), [&]<class T>() {
-            launch_1d(
-                n, 
-                _binary_kernel<T, O, Op>,
-                static_cast<const T*>(a.storage->data()),
-                static_cast<const T*>(b.storage->data()),
-                tensor_view_to_static(a),
-                tensor_view_to_static(b),
-                static_cast<O*>(out->data()),
-                n,
-                op
-            );
-        });
-    });
+    auto out = Storage::allocate(n, out_dtype, Device::Cuda);
+    launch_1d(
+        n, 
+        _binary_kernel<T, O, Op>,
+        static_cast<const T*>(a.storage->data()),
+        static_cast<const T*>(b.storage->data()),
+        tensor_view_to_static(a),
+        tensor_view_to_static(b),
+        static_cast<O*>(out->data()),
+        n,
+        op
+    );
     return out;
 }
 
@@ -106,12 +96,20 @@ std::shared_ptr<Storage> _dispatch_binary(
             "_dispatch_binary: expected same size tensors, got " + vec_to_string(a.shape)
             +  " and " + vec_to_string(b.shape) + "."
         );
-    switch (s1->device()) {
-        case Device::Cpu: return _cpu_binary_op_generic<Dispatch>(a, b, op, out_dtype);
-        case Device::Cuda: return _cuda_binary_op_generic<Dispatch>(a, b, op, out_dtype);
-        default: NT_UNREACHABLE();
-    }
-    return {};
+    auto eff_dtype = out_dtype.value_or(a.storage->dtype());
+    return Dispatch::run(eff_dtype, [&]<class O>() {
+        return Dispatch::run(a.storage->dtype(), [&]<class T>() {
+            switch (s1->device()) {
+                case Device::Cpu: return _cpu_binary_op_generic<T, O>(
+                    a, b, op, eff_dtype
+                );
+                case Device::Cuda: return _cuda_binary_op_generic<T, O>(
+                    a, b, op, eff_dtype
+                );
+                default: NT_UNREACHABLE();
+            }
+        });
+    });
 }
 
 #define DEFINE_BINARY(name, expr) \

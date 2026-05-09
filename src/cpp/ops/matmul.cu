@@ -140,6 +140,7 @@ std::shared_ptr<Storage> matmul(const TensorView& x1, const TensorView& x2) {
         switch (x1.storage->device()) {
             case Device::Cpu: return _cpu_matmul<T>(x1, x2, ndim, out_shape, csize);
             case Device::Cuda: return _cuda_matmul<T>(x1, x2, ndim, out_shape, csize, lsize, rsize);
+            default: NT_UNREACHABLE();
         }
     });
 }
