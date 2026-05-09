@@ -111,7 +111,7 @@ std::shared_ptr<Storage> sum(const TensorView &x,
     }
   auto numel_drop = numel_from_shape(shape_drop);
   auto numel_keep = numel_from_shape(shape_keep);
-  return dispatch_dtype(x.storage->dtype(), [&]<typename T>() {
+  return DispatchAll::run(x.storage->dtype(), [&]<typename T>() {
     return DispatchArithmetic::run(dtype, [&]<typename O>() {
       switch (x.storage->device()) {
       case Device::Cpu:

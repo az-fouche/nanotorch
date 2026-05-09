@@ -20,7 +20,7 @@ bool equals(const TensorView &x1, const TensorView &x2) {
 
   auto n_axes = static_cast<py::ssize_t>(x1.shape.size());
   auto numel = numel_from_shape(x1.shape);
-  return dispatch_dtype(s1->dtype(), [&]<typename T>() {
+  return DispatchAll::run(s1->dtype(), [&]<typename T>() {
     auto *ptr_in1 = static_cast<const T *>(s1->data());
     auto *ptr_in2 = static_cast<const T *>(s2->data());
     std::vector<py::ssize_t> loc(n_axes);
@@ -76,7 +76,7 @@ void scatter_to_axes(const TensorView &src, const TensorView &out,
   auto loc_src = std::vector<py::ssize_t>(src_ndim);
   auto loc_out_basic = std::vector<py::ssize_t>(out_ndim);
   auto loc_out_ind = std::vector<py::ssize_t>(ind_ndim);
-  dispatch_dtype(out.storage->dtype(), [&]<typename T>() {
+  DispatchAll::run(out.storage->dtype(), [&]<typename T>() {
     auto out_data = static_cast<T *>(out.storage->data());
     auto src_data = static_cast<const T *>(src.storage->data());
     for (py::ssize_t idx = 0; idx < numel; ++idx) {
@@ -156,7 +156,7 @@ gather_from_axes(const TensorView &x, const std::vector<py::ssize_t> &new_shape,
   auto loc_out = std::vector<py::ssize_t>(out_ndim);
   auto loc_src_basic = std::vector<py::ssize_t>(src_ndim);
   auto loc_ind = std::vector<py::ssize_t>(ind_ndim);
-  return dispatch_dtype(x.storage->dtype(), [&]<typename T>() {
+  return DispatchAll::run(x.storage->dtype(), [&]<typename T>() {
     auto old_data = static_cast<const T *>(x.storage->data());
     auto new_data = static_cast<T *>(new_storage->data());
     for (py::ssize_t idx_out = 0; idx_out < numel; ++idx_out) {
@@ -250,7 +250,7 @@ void copy_view(const TensorView &src, const TensorView &out) {
   _require_same_device(src.storage, out.storage, "copy_view");
   _require_same_dtype(src.storage, out.storage, "copy_view");
   _require_same_shape(src, out, "copy_view");
-  dispatch_dtype(out.storage->dtype(), [&]<typename T>() {
+  DispatchAll::run(out.storage->dtype(), [&]<typename T>() {
     auto *ptr_src = static_cast<const T *>(src.storage->data());
     auto *ptr_out = static_cast<T *>(out.storage->data());
     switch (src.storage->device()) {
