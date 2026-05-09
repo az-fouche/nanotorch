@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Sequence
 
 from nanotorch._device import Device
@@ -29,7 +30,7 @@ class Module:
 
 
 class Linear(Module):
-    """Linear module xW + b.
+    """Linear module xW + b (W initialized with Kaiming).
 
     Parameters
     ----------
@@ -42,7 +43,7 @@ class Linear(Module):
     """
 
     def __init__(self, fan_in: int, fan_out: int, bias: bool = True) -> None:
-        self._W = rand(fan_in, fan_out) - 0.5
+        self._W = _kaiming_W(fan_in, fan_out)
         self._W.enable_grad()
         if bias:
             self._b = zeros(fan_out, requires_grad=True)
@@ -105,3 +106,13 @@ class Sequential(Module):
             else:
                 x = mod(x)
         return x
+
+
+def _kaiming_W(fan_in: int, fan_out: int) -> Tensor:
+    """Get a random W tensor initialized with Kaiming."""
+    if fan_in <= 0 or fan_out <= 0:
+        raise ValueError(
+            f"Cannot initialize Linear with {fan_in=}, {fan_out=} (non-positive)."
+        )
+    z = math.sqrt(6 / fan_in)
+    return 2 * rand(fan_in, fan_out) * z - z
