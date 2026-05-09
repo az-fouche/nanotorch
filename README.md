@@ -1,28 +1,35 @@
 # Nanotorch: a minimal PyTorch clone
 
-Pet project for fun (and to learn!), the goal is to reimplement from scratch a
-PyTorch-like autograd library in python/C++, without relying on generative AI
-to produce the code.
+My pet project of the moment. The goal here is to reimplement from scratch a PyTorch-like autograd library, **without relying on generative AI to produce the code** (this is a hard project constraint). I believe that while coding agents are great tools, they can also limit the learning process in such project. 
+
+For this reason, I use Claude Code here as a "pair programming" companion: it helps me debug, reviews my code, explores the docs, but it does not take the technical decisions nor write the software. This is (for now) the best balance I found to maximize the personal benefit of these systems. 
 
 ## Nanotorch scope
 
-- Usable tensor library supporting all common operations.
-- Tensors convertible from/to Torch/NumPy/Jax.
-- Autograd support.
-- Heavy lifting done with C++ kernels.
-- Basic CUDA support.
-- Basic linear algebra and optimizers tools.
-- Comprehensive test coverage and documentation.
-- **The project is successful if we can train an MLP on GPU with torch-like code.**
+- Working autograd engine.
+- Tensor storage handled in contiguous memory with strided views.
+- Intensive operations bound from C++ implementations.
+- Partial CUDA support with acceptable performance (we don't aim for 90% of cuBLAS performance though).
+- Deep learning boilerplate (modules, optimizers, dataloaders...).
+- Comprehensive test coverage.
 
-## Project constraints
+## Setup
 
-- No code should be produced with generative AI. It can be used as a helper to
-  answer questions or review the code, but all code must be hand-written.
-- No `numpy` or `torch` is allowed (except in some unit tests, because that's
-  handy). All the logic must be implemented in `nanotorch`. 
-- No reliance on native Python's `array.array` module either, we must implement
-  the contiguous array logic in C++.
-- No overreliance on out-of-the-box algorithms in Python and C++, the goal is
-  to reimplement as much things as possible from scratch to fully understand all
-  the internals. Exceptions can be made for gnarly operations like RNG.
+```bash
+# Install the environment
+uv sync
+
+# Launch a MLP training on mock data (but real compute)
+uv run python scripts/train_mlp_basic.py --device [cpu|cuda]
+
+# Launch the unit tests
+uv run pytest 
+```
+
+## References
+
+- [*PyTorch internals*, E. Zyang's blog post](https://blog.ezyang.com/2019/05/pytorch-internals/) -- A good starting point to explore PyTorch's architecture
+- [*How to Optimize a CUDA Matmul Kernel for cuBLAS-like Performance: a Worklog*, S. Boehm's blog post](https://siboehm.com/articles/22/CUDA-MMM) -- How to incrementally approach cuBLAS' reference performance of GEMM
+- [TinyGrad](https://tinygrad.org/#tinygrad) -- A really thought-provoking framework that proposes to rethink the way we approach device programming
+- [*CUDA C++ Programming Guide*, NVIDIA technical document](https://docs.nvidia.com/cuda/pdf/CUDA_C_Programming_Guide.pdf) -- The CUDA Bible, literally
+- [PyTorch's Github](https://github.com/pytorch/pytorch) -- Though the repo has become quite gigantic and it's not easy to find what I look for :)
