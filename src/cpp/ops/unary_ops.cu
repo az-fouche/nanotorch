@@ -151,23 +151,6 @@ std::shared_ptr<Storage> _dispatch_unary(const TensorView &x, Op op) {
   });
 }
 
-#define DEFINE_UNARY(name, expr)                                               \
-  struct name##Op {                                                            \
-    template <class T> __host__ __device__ T operator()(T a) const {           \
-      return expr;                                                             \
-    }                                                                          \
-  };
-
-DEFINE_UNARY(Exp, std::exp(a))
-std::shared_ptr<Storage> exp(const TensorView &x) {
-  return _dispatch_unary<DispatchFloat>(x, ExpOp());
-}
-
-DEFINE_UNARY(Log, std::log(a))
-std::shared_ptr<Storage> log(const TensorView &x) {
-  return _dispatch_unary<DispatchFloat>(x, LogOp());
-}
-
 template <class T> __host__ __device__ T int_pow(T a, T n) {
   T r = 1;
   while (n > 0) {
@@ -201,30 +184,23 @@ std::shared_ptr<Storage> pow(const TensorView &x, Scalar value) {
   });
 }
 
-DEFINE_UNARY(Neg, -a)
-std::shared_ptr<Storage> neg(const TensorView &x) {
-  return _dispatch_unary<DispatchArithmetic>(x, NegOp());
-}
+#define DEFINE_UNARY(name, expr, dispatch)                                     \
+  struct name##Op {                                                            \
+    template <class T> __host__ __device__ T operator()(T a) const {           \
+      return expr;                                                             \
+    }                                                                          \
+  };                                                                           \
+  std::shared_ptr<Storage> name(const TensorView &x) {                         \
+    return _dispatch_unary<dispatch>(x, name##Op());                           \
+  }
 
-DEFINE_UNARY(Relu, (a >= 0) ? a : 0)
-std::shared_ptr<Storage> relu(const TensorView &x) {
-  return _dispatch_unary<DispatchArithmetic>(x, ReluOp());
-}
-
-DEFINE_UNARY(Sqrt, std::sqrt(a))
-std::shared_ptr<Storage> sqrt(const TensorView &x) {
-  return _dispatch_unary<DispatchArithmetic>(x, SqrtOp());
-}
-
-DEFINE_UNARY(Tanh, std::tanh(a))
-std::shared_ptr<Storage> tanh(const TensorView &x) {
-  return _dispatch_unary<DispatchArithmetic>(x, TanhOp());
-}
-
-DEFINE_UNARY(Sigmoid, 1.0 / (1.0 + std::exp(-a)))
-std::shared_ptr<Storage> sigmoid(const TensorView &x) {
-  return _dispatch_unary<DispatchArithmetic>(x, SigmoidOp());
-}
+DEFINE_UNARY(exp, std::exp(a), DispatchFloat)
+DEFINE_UNARY(log, std::log(a), DispatchFloat)
+DEFINE_UNARY(neg, -a, DispatchArithmetic)
+DEFINE_UNARY(relu, (a >= 0) ? a : 0, DispatchArithmetic)
+DEFINE_UNARY(sqrt, std::sqrt(a), DispatchArithmetic)
+DEFINE_UNARY(tanh, std::tanh(a), DispatchArithmetic)
+DEFINE_UNARY(sigmoid, 1.0 / (1.0 + std::exp(-a)), DispatchArithmetic)
 
 void bind_unary_ops_(py::module_ &m) {
   m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"),
