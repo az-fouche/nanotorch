@@ -13,9 +13,9 @@ std::shared_ptr<Storage> _cpu_matmul(
     auto new_storage = Storage::allocate(numel, x1.storage->dtype(), Device::Cpu);
     auto* ptr1 = static_cast<const T*>(x1.storage->data());
     auto* ptr2 = static_cast<const T*>(x2.storage->data());
-    auto prout = static_cast<T*>(new_storage->data());
+    auto ptr_out = static_cast<T*>(new_storage->data());
     std::vector<py::ssize_t> loc(ndim);
-    for (py::ssize_t prout_idx = 0; prout_idx < numel; ++prout_idx) {
+    for (py::ssize_t ptr_out_idx = 0; ptr_out_idx < numel; ++ptr_out_idx) {
         // B, i, j -> derive B, i, c and B, c, j
         T acc = static_cast<T>(0.0);
         for (int c = 0; c < csize; ++c) {
@@ -31,7 +31,7 @@ std::shared_ptr<Storage> _cpu_matmul(
             }
             acc += ptr1[idx1] * ptr2[idx2];
         }
-        prout[prout_idx] = acc;
+        ptr_out[ptr_out_idx] = acc;
 
         py::ssize_t j = ndim - 1;
         while (j >= 0) { 
