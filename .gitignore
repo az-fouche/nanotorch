@@ -10,6 +10,8 @@ memory/
 .pytest_cache
 .vscode
 build-ide/
+.clangd
+.clangd-stubs.h
 
 # Virtual environments
 .venv
