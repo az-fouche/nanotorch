@@ -229,8 +229,16 @@ template <typename T> struct PowOp {
   }
 };
 std::shared_ptr<Storage> pow(const TensorView &x, Scalar value) {
-  return dispatch_dtype(x.storage->dtype(), [&]<class U>() {
-    return _dispatch_unary<DispatchArithmetic>(x, PowOp<U>{value.item<U>()});
+  return DispatchArithmetic::run(x.storage->dtype(), [&]<class T>() {
+    auto op = PowOp<T>{value.item<T>()};
+    switch (x.storage->device()) {
+    case Device::Cpu:
+      return _cpu_unary_op_generic<T>(x, op);
+    case Device::Cuda:
+      return _cuda_unary_op_generic<T>(x, op);
+    default:
+      NT_UNREACHABLE();
+    }
   });
 }
 
