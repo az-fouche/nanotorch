@@ -1,8 +1,6 @@
 # Nanotorch: a minimal PyTorch clone
 
-My pet project of the moment. The goal here is to reimplement from scratch a PyTorch-like autograd library, **without relying on generative AI to produce the code** (this is a hard project constraint). I believe that while coding agents are great tools, they can also limit the learning process in such project. 
-
-For this reason, I use Claude Code here as a "pair programming" companion: it helps me debug, reviews my code, explores the docs, but it does not take the technical decisions nor write the software. This is (for now) the best balance I found to maximize the personal benefit of these systems. 
+My pet project of the moment. The goal here is to reimplement from scratch a PyTorch-like imperative autograd library with all the expected primitives and CUDA support.
 
 ## Nanotorch scope
 
@@ -25,6 +23,12 @@ uv run python scripts/train_mlp_basic.py --device [cpu|cuda]
 # Launch the unit tests
 uv run pytest 
 ```
+
+## Generative AI stance
+
+**No generative AI has been used to produce the code** (this is a hard project constraint). I believe that while coding agents are great tools, they can also limit the learning process in such project. 
+
+For this reason, I use Claude Code here as a "pair programming" companion: it helps me debug, reviews my code, explores the docs, but it does not take the technical decisions nor write the software. This is (for now) the best balance I found to maximize the personal benefit of these systems. 
 
 ## References
 
