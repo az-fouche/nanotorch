@@ -1,4 +1,4 @@
-"""Usual differentiable tensor operations and their derivative."""
+"""Unary differentiable tensor operations and their derivative."""
 
 from nanotorch import _C
 from nanotorch._data_type import Dtype, promote_dtypes

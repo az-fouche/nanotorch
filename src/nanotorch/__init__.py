@@ -23,17 +23,17 @@ from .autograd import (
 from .core import Tensor, TensorLike
 from .factories import arange, eye, full, ones, rand, randint, tensor, zeros
 from .ops import (
-    _equal_op,
-    _greater_eq_op,
-    _greater_op,
     add,
     clone,
     divide,
     eq,
+    equal_op_,
     equals,
     exp,
     flatten,
     geq,
+    greater_eq_op_,
+    greater_op_,
     gt,
     leq,
     log,
@@ -150,9 +150,9 @@ Tensor.__pow__ = lambda self, exponent: PowOp.apply(
 Tensor.__rpow__ = lambda self, exponent: PowOp.apply(
     _totensor(exponent, anchor=self), self
 )
-Tensor.__eq__ = lambda self, other: _equal_op(self, _totensor(other, anchor=self))
-Tensor.__gt__ = lambda self, other: _greater_op(self, _totensor(other, anchor=self))
-Tensor.__ge__ = lambda self, other: _greater_eq_op(self, _totensor(other, anchor=self))
+Tensor.__eq__ = lambda self, other: equal_op_(self, _totensor(other, anchor=self))
+Tensor.__gt__ = lambda self, other: greater_op_(self, _totensor(other, anchor=self))
+Tensor.__ge__ = lambda self, other: greater_eq_op_(self, _totensor(other, anchor=self))
 Tensor.__lt__ = lambda self, other: _totensor(other, anchor=self) > self
 Tensor.__le__ = lambda self, other: _totensor(other, anchor=self) >= self
 Tensor.exp = lambda self: ExpOp.apply(self)

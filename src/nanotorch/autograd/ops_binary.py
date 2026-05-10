@@ -1,4 +1,4 @@
-"""Usual differentiable tensor operations and their derivative."""
+"""Binary differentiable tensor operations and their derivative."""
 
 from typing import Callable
 

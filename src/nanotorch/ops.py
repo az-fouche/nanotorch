@@ -150,7 +150,7 @@ def sigmoid(x: Tensor) -> Tensor:
 # Protected
 
 
-def _equal_op(x1: Tensor, x2: Tensor) -> Tensor:
+def equal_op_(x1: Tensor, x2: Tensor) -> Tensor:
     dtype = promote_dtypes(x1.dtype, x2.dtype)
     shape = broadcast_shapes(x1.shape, x2.shape)
     x1 = x1.to(dtype).expand(*shape)
@@ -158,7 +158,7 @@ def _equal_op(x1: Tensor, x2: Tensor) -> Tensor:
     return Tensor._new_contiguous(_C.pw_equal(x1._C_view, x2._C_view), x1.shape)
 
 
-def _greater_op(x1: Tensor, x2: Tensor) -> Tensor:
+def greater_op_(x1: Tensor, x2: Tensor) -> Tensor:
     dtype = promote_dtypes(x1.dtype, x2.dtype)
     shape = broadcast_shapes(x1.shape, x2.shape)
     x1 = x1.to(dtype).expand(*shape)
@@ -166,7 +166,7 @@ def _greater_op(x1: Tensor, x2: Tensor) -> Tensor:
     return Tensor._new_contiguous(_C.pw_greater(x1._C_view, x2._C_view), x1.shape)
 
 
-def _greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
+def greater_eq_op_(x1: Tensor, x2: Tensor) -> Tensor:
     dtype = promote_dtypes(x1.dtype, x2.dtype)
     shape = broadcast_shapes(x1.shape, x2.shape)
     x1 = x1.to(dtype).expand(*shape)
