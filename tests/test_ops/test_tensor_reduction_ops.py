@@ -29,23 +29,37 @@ REDUCE_INPUTS = {
 
 
 @pytest.mark.parametrize(
-    "op", [lambda x: x.sum(), lambda x: x.max(), lambda x: x.min()]
+    "name_op, op_nt, op_torch",
+    [
+        ("sum", lambda x: x.sum(), lambda x: x.sum()),
+        ("max", lambda x: x.max(), lambda x: x.max()),
+        ("min", lambda x: x.min(), lambda x: x.min()),
+        ("argmin", lambda x: nt.argmin(x), lambda x: torch.argmin(x)),
+        ("argmax", lambda x: nt.argmax(x), lambda x: torch.argmax(x)),
+    ],
 )
 @pytest.mark.parametrize("name,input", REDUCE_INPUTS.items())
-def test_tensor_reduce(name, op, input):
-    y_nt = op(nt.tensor(input, dtype=nt.float64))
-    y_torch = op(torch.tensor(input, dtype=torch.float64))
+def test_tensor_reduce(name, op_nt, op_torch, name_op, input):
+    y_nt = op_nt(nt.tensor(input, dtype=nt.float64))
+    y_torch = op_torch(torch.tensor(input, dtype=torch.float64))
     testing.assert_allclose(y_nt, y_torch, tol=1e-4)
 
 
 @requires_cuda
 @pytest.mark.parametrize(
-    "op", [lambda x: x.sum(), lambda x: x.max(), lambda x: x.min()]
+    "name_op, op_nt, op_torch",
+    [
+        ("sum", lambda x: x.sum(), lambda x: x.sum()),
+        ("max", lambda x: x.max(), lambda x: x.max()),
+        ("min", lambda x: x.min(), lambda x: x.min()),
+        ("argmin", lambda x: nt.argmin(x), lambda x: torch.argmin(x)),
+        ("argmax", lambda x: nt.argmax(x), lambda x: torch.argmax(x)),
+    ],
 )
 @pytest.mark.parametrize("name,input", REDUCE_INPUTS.items())
-def test_tensor_reduce_cuda(name, op, input):
-    y_nt = op(nt.tensor(input, dtype=nt.float64, device="cuda")).cpu()
-    y_torch = op(torch.tensor(input, dtype=torch.float64))
+def test_tensor_reduce_cuda(name, op_nt, op_torch, name_op, input):
+    y_nt = op_nt(nt.tensor(input, dtype=nt.float64, device="cuda")).cpu()
+    y_torch = op_torch(torch.tensor(input, dtype=torch.float64))
     testing.assert_allclose(y_nt, y_torch, tol=1e-4)
 
 

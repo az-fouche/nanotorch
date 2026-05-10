@@ -1,11 +1,17 @@
 """Tensor operations as non-member functions."""
 
+import math
+
 from nanotorch import _C
+from nanotorch._data_type import Dtype
+from nanotorch._indexing import TensorShape
+from nanotorch.autograd.ops_utils import broadcast_axis
+from nanotorch.core import Tensor
 
 from . import autograd
 from ._data_type import promote_dtypes
 from ._indexing import broadcast_shapes
-from .core import Dtype, Tensor, TensorShape, inherit_doc
+from .core import inherit_doc
 
 
 # Core ops
@@ -145,6 +151,70 @@ def sqrt(x: Tensor) -> Tensor:
 @inherit_doc(autograd.SigmoidOp)
 def sigmoid(x: Tensor) -> Tensor:
     return autograd.SigmoidOp.apply(x)
+
+
+def argmin(
+    x: Tensor, axis: int | TensorShape | None = None, keepdim: bool = False
+) -> Tensor:
+    """Computes the index of the min value along one or more axes.
+
+    Parameters
+    ----------
+    x: Tensor
+        Target tensor.
+    axis: int | tuple[int, ...] | None
+        Axes index to min along, integer is interpreted as (n,), None as all axes.
+        Dimensions of these axes are collapsed by the operation.
+    keepdim: bool
+        Instead of collapsing target axes, keeps the axis with shape[i] = 1.
+
+    Returns
+    -------
+    Tensor
+        New tensor of containing the min coefficients.
+    """
+    axis = broadcast_axis(axis, x)
+    if keepdim:
+        new_shape = tuple(1 if i in axis else s for i, s in enumerate(x.shape))
+    else:
+        new_shape = tuple(s for i, s in enumerate(x.shape) if i not in axis)
+    if x.is_empty:
+        return Tensor._new_contiguous(
+            _C.zeros(math.prod(new_shape), x.dtype, x.device), new_shape
+        )
+    return Tensor._new_contiguous(_C.argmin(x._C_view, axis), new_shape)
+
+
+def argmax(
+    x: Tensor, axis: int | TensorShape | None = None, keepdim: bool = False
+) -> Tensor:
+    """Computes the index of the max value along one or more axes.
+
+    Parameters
+    ----------
+    x: Tensor
+        Target tensor.
+    axis: int | tuple[int, ...] | None
+        Axes index to max along, integer is interpreted as (n,), None as all axes.
+        Dimensions of these axes are collapsed by the operation.
+    keepdim: bool
+        Instead of collapsing target axes, keeps the axis with shape[i] = 1.
+
+    Returns
+    -------
+    Tensor
+        New tensor of containing the max coefficients.
+    """
+    axis = broadcast_axis(axis, x)
+    if keepdim:
+        new_shape = tuple(1 if i in axis else s for i, s in enumerate(x.shape))
+    else:
+        new_shape = tuple(s for i, s in enumerate(x.shape) if i not in axis)
+    if x.is_empty:
+        return Tensor._new_contiguous(
+            _C.zeros(math.prod(new_shape), x.dtype, x.device), new_shape
+        )
+    return Tensor._new_contiguous(_C.argmax(x._C_view, axis), new_shape)
 
 
 # Protected

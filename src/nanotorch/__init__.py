@@ -26,6 +26,8 @@ from .core import Tensor, TensorLike
 from .factories import arange, eye, full, ones, rand, randint, tensor, zeros
 from .ops import (
     add,
+    argmax,
+    argmin,
     clone,
     divide,
     eq,
@@ -62,6 +64,8 @@ __all__ = [
     "TensorLike",
     "add",
     "arange",
+    "argmax",
+    "argmin",
     "bool_",
     "clone",
     "divide",
