@@ -27,7 +27,7 @@ pybind11_add_module(_C MODULE
     src/cpp/factory.cpp
     src/cpp/ops/cuda.cpp
     src/cpp/ops/matmul.cu
-    src/cpp/ops/ops.cu
+    src/cpp/ops/copy_ops.cu
     src/cpp/ops/binary_ops.cu
     src/cpp/ops/inplace_ops.cu
     src/cpp/ops/reduction_ops.cu

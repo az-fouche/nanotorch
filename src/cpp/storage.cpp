@@ -94,4 +94,11 @@ void bind_storage_(py::module_ &m) {
       .def_property_readonly("device", &Storage::device)
       .def_property_readonly("version", &Storage::version)
       .def_buffer([](Storage &s) { return s.buffer_info(); });
+  m.def(
+      "cast", [](const Storage &s, Dtype t) { return s.cast(t); },
+      "Cast a storage to another dtype.", py::arg("storage"), py::arg("dtype"));
+  m.def(
+      "to", [](const Storage &s, Device d) { return s.to(d); },
+      "Move a storage to another device.", py::arg("storage"),
+      py::arg("device"));
 }

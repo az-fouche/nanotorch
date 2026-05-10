@@ -1,5 +1,6 @@
+#include "copy_ops.h"
 #include "cuda.cuh"
-#include "ops.h"
+
 
 // Ops
 
@@ -216,13 +217,6 @@ std::shared_ptr<Storage> clone_contiguous_view_from(const TensorView &x) {
 }
 
 void bind_ops_(py::module_ &m) {
-  m.def(
-      "cast", [](const Storage &s, Dtype t) { return s.cast(t); },
-      "Cast a storage to another dtype.", py::arg("storage"), py::arg("dtype"));
-  m.def(
-      "to", [](const Storage &s, Device d) { return s.to(d); },
-      "Move a storage to another device.", py::arg("storage"),
-      py::arg("device"));
   m.def("copy_view", &copy_view, "Copy source view into target view.",
         py::arg("src"), py::arg("out"));
   m.def("clone_contiguous_view_from", &clone_contiguous_view_from,

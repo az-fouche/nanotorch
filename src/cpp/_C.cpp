@@ -1,14 +1,13 @@
 #include "factory.h"
 #include "ops/binary_ops.h"
+#include "ops/copy_ops.h"
 #include "ops/cuda.h"
 #include "ops/inplace_ops.h"
 #include "ops/matmul.h"
-#include "ops/ops.h"
 #include "ops/reduction_ops.h"
 #include "ops/unary_ops.h"
 #include "storage.h"
 #include "tensor_view.h"
-
 
 PYBIND11_MODULE(_C, m) {
   m.doc() = "nanotorch C++ core module.";
