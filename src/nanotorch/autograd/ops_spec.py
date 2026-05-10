@@ -40,6 +40,9 @@ class MatmulBroadcast:
     ref: int  # -> ref input position
 
 
+class Bool: ...
+
+
 @dataclass
 class Real:
     low: float = -500
@@ -55,6 +58,7 @@ class Axis:
 class AxisSet:
     ref: int
     min: int
+    split: bool
 
 
 @dataclass
@@ -73,4 +77,4 @@ class AxisExpand:
 
 
 InputShape = AnyShape | BroadcastableTo | MatmulBroadcast | None
-InputDomain = Real | Axis | AxisSet | AxisPermutation | AxisReshape | AxisExpand
+InputDomain = Bool | Real | Axis | AxisSet | AxisPermutation | AxisReshape | AxisExpand

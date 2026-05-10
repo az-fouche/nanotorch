@@ -33,7 +33,11 @@ class SumOp(Function):
         New tensor of containing the summed coefficients.
     """
 
-    op_spec = (sp.Input("tensor", sp.AnyShape(), sp.Real()),)
+    op_spec = (
+        sp.Input("tensor", sp.AnyShape(), sp.Real()),
+        sp.Input("scalar", None, sp.AxisSet(ref=0, min=0, split=False)),
+        sp.Input("scalar", None, sp.Bool()),
+    )
 
     def forward(
         self,
@@ -91,7 +95,11 @@ class MeanOp(Function):
         New tensor of containing the averaged coefficients.
     """
 
-    op_spec = (sp.Input("tensor", sp.AnyShape(), sp.Real()),)
+    op_spec = (
+        sp.Input("tensor", sp.AnyShape(), sp.Real()),
+        sp.Input("scalar", None, sp.AxisSet(ref=0, min=0, split=False)),
+        sp.Input("scalar", None, sp.Bool()),
+    )
 
     def forward(
         self,
@@ -141,7 +149,11 @@ class MaxOp(Function):
         New tensor of containing the max coefficients.
     """
 
-    op_spec = (sp.Input("tensor", sp.AnyShape(), sp.Real()),)
+    op_spec = (
+        sp.Input("tensor", sp.AnyShape(), sp.Real()),
+        sp.Input("scalar", None, sp.AxisSet(ref=0, min=0, split=False)),
+        sp.Input("scalar", None, sp.Bool()),
+    )
 
     def forward(
         self,
@@ -203,7 +215,11 @@ class MinOp(Function):
         New tensor of containing the min coefficients.
     """
 
-    op_spec = (sp.Input("tensor", sp.AnyShape(), sp.Real()),)
+    op_spec = (
+        sp.Input("tensor", sp.AnyShape(), sp.Real()),
+        sp.Input("scalar", None, sp.AxisSet(ref=0, min=0, split=False)),
+        sp.Input("scalar", None, sp.Bool()),
+    )
 
     def forward(
         self,

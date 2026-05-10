@@ -196,15 +196,13 @@ def test_ops_specs(op: type[ag.Function]):
         inputs = []
         for input_ in op.op_spec:
             domain = input_.domain
-            if isinstance(domain, sp.Real):
+            if isinstance(domain, (sp.Bool, sp.Real)):
                 inputs.append(_gen_float_like(input_, inputs))
             else:
                 inputs.extend(_gen_axis_like(domain, inputs))
-        testing.gradcheck(
-            op,
-            *[x for x in inputs if isinstance(x, Tensor)],
-            extra_args=[x for x in inputs if not isinstance(x, Tensor)],
-        )
+        tensor_in = [x for x in inputs if isinstance(x, Tensor)]
+        extra_args = [x for x in inputs if not isinstance(x, Tensor)]
+        testing.gradcheck(op, *tensor_in, extra_args=extra_args)
 
 
 def _gen_float_like(input_: sp.Input, inputs: list[TensorLike]) -> TensorLike:
@@ -233,7 +231,13 @@ def _gen_float_like(input_: sp.Input, inputs: list[TensorLike]) -> TensorLike:
         shape = tuple(shape)
     assert isinstance(shape, tuple)
 
-    x = nt.rand(*shape, dtype=nt.float64, requires_grad=False)
+    if isinstance(input_.domain, sp.Real):
+        dtype = nt.float64
+    elif isinstance(input_.domain, sp.Bool):
+        dtype = nt.bool_
+    else:
+        raise ValueError(f"Unrecognized type {input_.domain}")
+    x = nt.rand(*shape, dtype=nt.float64, requires_grad=False).to(dtype)
 
     if isinstance(input_.domain, sp.Real):
         x = (input_.domain.high - input_.domain.low) * x + input_.domain.low
@@ -245,14 +249,19 @@ def _gen_float_like(input_: sp.Input, inputs: list[TensorLike]) -> TensorLike:
     return x
 
 
-def _gen_axis_like(domain: sp.InputDomain, inputs: list[TensorLike]) -> tuple[int, ...]:
+def _gen_axis_like(
+    domain: sp.InputDomain, inputs: list[TensorLike]
+) -> tuple[int, ...] | list[tuple[int, ...]]:
     ref = inputs[domain.ref]  # type: ignore
     assert isinstance(ref, Tensor)
     if isinstance(domain, (sp.Axis, sp.AxisSet)):
         naxes = (
             1 if isinstance(domain, (sp.Axis)) else random.randint(domain.min, ref.ndim)
         )
-        return tuple(random.sample(range(ref.ndim), naxes))
+        axes = tuple(random.sample(range(ref.ndim), naxes))
+        if isinstance(domain, sp.AxisSet) and not domain.split:
+            return [axes]
+        return axes
     elif isinstance(domain, sp.AxisPermutation):
         return tuple(random.sample(range(ref.ndim), ref.ndim))
     elif isinstance(domain, sp.AxisReshape):
