@@ -198,9 +198,9 @@ DEFINE_UNARY(exp, std::exp(a), DispatchFloat)
 DEFINE_UNARY(log, std::log(a), DispatchFloat)
 DEFINE_UNARY(neg, -a, DispatchArithmetic)
 DEFINE_UNARY(relu, (a >= 0) ? a : 0, DispatchArithmetic)
-DEFINE_UNARY(sqrt, std::sqrt(a), DispatchArithmetic)
-DEFINE_UNARY(tanh, std::tanh(a), DispatchArithmetic)
-DEFINE_UNARY(sigmoid, 1.0 / (1.0 + std::exp(-a)), DispatchArithmetic)
+DEFINE_UNARY(sqrt, std::sqrt(a), DispatchFloat)
+DEFINE_UNARY(tanh, std::tanh(a), DispatchFloat)
+DEFINE_UNARY(sigmoid, T(1) / (T(1) + std::exp(-a)), DispatchFloat)
 
 void bind_unary_ops_(py::module_ &m) {
   m.def("sum", &sum, "Sum all elements in a tensor.", py::arg("x"),

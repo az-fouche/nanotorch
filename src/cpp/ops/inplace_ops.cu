@@ -5,7 +5,6 @@
 
 template <class T, class Op>
 void _cpu_inplace_apply(TensorView &out, const TensorView &other, Op op) {
-  auto ndim = static_cast<py::ssize_t>(out.shape.size());
   auto numel = numel_from_shape(out.shape);
   auto *ptr_other = static_cast<const T *>(other.storage->data());
   auto *ptr_out = static_cast<T *>(out.storage->data());
@@ -58,37 +57,23 @@ void _dispatch_inplace_apply(TensorView &out, const TensorView &other, Op op) {
   out.storage->bump_version();
 }
 
-#define DEFINE_INPLACE(name, expr)                                             \
+#define DEFINE_INPLACE(name, expr, dispatch)                                   \
   struct name##Op {                                                            \
-    template <class T> __host__ __device__ T operator()(T a, T b) const {      \
+    template <class T>                                                         \
+    __host__ __device__ T operator()([[maybe_unused]] T a,                     \
+                                     [[maybe_unused]] T b) const {             \
       return expr;                                                             \
     }                                                                          \
-  };
+  };                                                                           \
+  void name##_inplace(TensorView &out, const TensorView &other) {              \
+    _dispatch_inplace_apply<dispatch>(out, other, name##Op());                 \
+  }
 
-DEFINE_INPLACE(Add, a + b)
-void add_inplace(TensorView &out, const TensorView &other) {
-  _dispatch_inplace_apply<DispatchAll>(out, other, AddOp());
-}
-
-DEFINE_INPLACE(Sub, a - b)
-void sub_inplace(TensorView &out, const TensorView &other) {
-  _dispatch_inplace_apply<DispatchAll>(out, other, SubOp());
-}
-
-DEFINE_INPLACE(Mul, a *b)
-void mul_inplace(TensorView &out, const TensorView &other) {
-  _dispatch_inplace_apply<DispatchAll>(out, other, MulOp());
-}
-
-DEFINE_INPLACE(Div, a / b)
-void div_inplace(TensorView &out, const TensorView &other) {
-  _dispatch_inplace_apply<DispatchArithmetic>(out, other, DivOp());
-}
-
-DEFINE_INPLACE(Copy, b)
-void copy_inplace(TensorView &out, const TensorView &other) {
-  _dispatch_inplace_apply<DispatchAll>(out, other, CopyOp());
-}
+DEFINE_INPLACE(add, a + b, DispatchAll)
+DEFINE_INPLACE(sub, a - b, DispatchAll)
+DEFINE_INPLACE(mul, a *b, DispatchAll)
+DEFINE_INPLACE(div, a / b, DispatchArithmetic)
+DEFINE_INPLACE(copy, b, DispatchAll)
 
 void bind_inplace_ops_(py::module_ &m) {
   m.def("add_inplace", &add_inplace, "Add elements inplace.", py::arg("x1"),

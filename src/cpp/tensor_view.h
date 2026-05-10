@@ -23,7 +23,7 @@ inline void _require_same_shape(const TensorView &x1, const TensorView &x2,
 
 inline py::ssize_t unravel(py::ssize_t i, const TensorView &x) {
   py::ssize_t idx = x.offset;
-  for (int j = x.shape.size() - 1; j >= 0; --j) {
+  for (py::ssize_t j = x.shape.size() - 1; j >= 0; --j) {
     auto coord = i % x.shape[j];
     i /= x.shape[j];
     idx += coord * x.strides[j];

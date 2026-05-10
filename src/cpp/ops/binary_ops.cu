@@ -7,7 +7,6 @@ template <class T, class O, class F>
 std::shared_ptr<Storage> _cpu_binary_op_generic(const TensorView &x1,
                                                 const TensorView &x2, F &&func,
                                                 Dtype out_dtype) {
-  auto ndim = static_cast<py::ssize_t>(x1.shape.size());
   auto numel = numel_from_shape(x1.shape);
   auto *ptr_in1 = static_cast<const T *>(x1.storage->data());
   auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
@@ -69,49 +68,23 @@ _dispatch_binary(const TensorView &x1, const TensorView &x2, Op op,
   });
 }
 
-#define DEFINE_BINARY(name, expr)                                              \
+#define DEFINE_BINARY(name, expr, dispatch, out_dtype)                         \
   struct name##Op {                                                            \
     template <class T> __host__ __device__ T operator()(T a, T b) const {      \
       return expr;                                                             \
     }                                                                          \
-  };
+  };                                                                           \
+  std::shared_ptr<Storage> name(const TensorView &x1, const TensorView &x2) {  \
+    return _dispatch_binary<dispatch>(x1, x2, name##Op(), out_dtype);          \
+  }
 
-DEFINE_BINARY(Add, a + b)
-std::shared_ptr<Storage> add(const TensorView &x1, const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, AddOp());
-}
-
-DEFINE_BINARY(Sub, a - b)
-std::shared_ptr<Storage> subtract(const TensorView &x1, const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, SubOp());
-}
-
-DEFINE_BINARY(Mul, a *b)
-std::shared_ptr<Storage> multiply(const TensorView &x1, const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, MulOp());
-}
-
-DEFINE_BINARY(Div, a / b)
-std::shared_ptr<Storage> divide(const TensorView &x1, const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, DivOp());
-}
-
-DEFINE_BINARY(PwEqual, a == b)
-std::shared_ptr<Storage> pw_equal(const TensorView &x1, const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, PwEqualOp(), Dtype::Bool);
-}
-
-DEFINE_BINARY(PwGreater, a > b)
-std::shared_ptr<Storage> pw_greater(const TensorView &x1,
-                                    const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, PwGreaterOp(), Dtype::Bool);
-}
-
-DEFINE_BINARY(PwGreaterEq, a >= b)
-std::shared_ptr<Storage> pw_greater_eq(const TensorView &x1,
-                                       const TensorView &x2) {
-  return _dispatch_binary<DispatchAll>(x1, x2, PwGreaterEqOp(), Dtype::Bool);
-}
+DEFINE_BINARY(add, a + b, DispatchAll, std::nullopt)
+DEFINE_BINARY(subtract, a - b, DispatchAll, std::nullopt)
+DEFINE_BINARY(multiply, a *b, DispatchAll, std::nullopt)
+DEFINE_BINARY(divide, a / b, DispatchArithmetic, std::nullopt)
+DEFINE_BINARY(pw_equal, a == b, DispatchAll, Dtype::Bool)
+DEFINE_BINARY(pw_greater, a > b, DispatchAll, Dtype::Bool)
+DEFINE_BINARY(pw_greater_eq, a >= b, DispatchAll, Dtype::Bool)
 
 // Equals
 
