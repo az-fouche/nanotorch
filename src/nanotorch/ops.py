@@ -2,7 +2,7 @@
 
 import math
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 from nanotorch._data_type import Dtype
 from nanotorch._indexing import TensorShape
 from nanotorch.core import Tensor

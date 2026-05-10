@@ -2,7 +2,7 @@
 
 from typing import Callable
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 from nanotorch._data_type import promote_dtypes
 from nanotorch._indexing import broadcast_shapes
 from nanotorch.core import Tensor, TensorShape

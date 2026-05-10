@@ -1,6 +1,6 @@
 """Handles tensor values typing."""
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 
 InputType = list | float | int | bool
 

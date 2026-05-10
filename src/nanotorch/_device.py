@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 
 Device = _C.Device
 DeviceLiteral = Literal["cpu", "cuda"]

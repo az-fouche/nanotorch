@@ -1,29 +1,51 @@
 #include "factory.h"
 
+#include "cuda.cuh"
+
 std::shared_ptr<Storage> zeros(py::ssize_t n, Dtype dtype, Device device) {
   return Storage::allocate(n, dtype, device); // 0 by default
 }
 
+template <class T>
+__global__ void _fill_kernel(py::ssize_t n, T value, T *ptr_out) {
+  auto i = blockDim.x * blockIdx.x + threadIdx.x;
+  if (i >= n)
+    return;
+  ptr_out[i] = value;
+}
+
+template <class T>
+std::shared_ptr<Storage> _full(py::ssize_t n, T value, Dtype dtype,
+                               Device device) {
+  auto storage_out = zeros(n, dtype, device);
+  if (value == T{})
+    return storage_out;
+  auto ptr_out = static_cast<T *>(storage_out->data());
+  switch (device) {
+  case Device::Cpu:
+    for (py::ssize_t i = 0; i < n; ++i)
+      ptr_out[i] = value;
+    break;
+  case Device::Cuda:
+    launch_1d(n, _fill_kernel<T>, n, value, ptr_out);
+    break;
+  default:
+    NT_UNREACHABLE();
+  }
+  return storage_out;
+}
+
 std::shared_ptr<Storage> ones(py::ssize_t n, Dtype dtype, Device device) {
-  auto storage = zeros(n, dtype, Device::Cpu);
-  DispatchAll::run(dtype, [&]<class T>() {
-    auto data = static_cast<T *>(storage->data());
-    for (py::ssize_t i = 0; i < storage->size(); ++i)
-      data[i] = static_cast<T>(1);
+  return DispatchAll::run(dtype, [&]<class T>() {
+    return _full<T>(n, static_cast<T>(1), dtype, device);
   });
-  return storage->to(device);
 }
 
 std::shared_ptr<Storage> full(py::ssize_t n, Scalar value, Dtype dtype,
                               Device device) {
-  auto storage = zeros(n, dtype, Device::Cpu); // TODO(#14): Avoid device move
-  DispatchAll::run(dtype, [&]<class T>() {
-    auto data = static_cast<T *>(storage->data());
-    auto fill = value.item<T>();
-    for (py::ssize_t i = 0; i < storage->size(); ++i)
-      data[i] = fill;
+  return DispatchAll::run(dtype, [&]<class T>() {
+    return _full<T>(n, value.item<T>(), dtype, device);
   });
-  return storage->to(device);
 }
 
 std::shared_ptr<Storage> eye(py::ssize_t n, Dtype dtype, Device device) {
@@ -47,18 +69,6 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start,
   });
   return storage->to(device);
 }
-
-// Random
-
-namespace {
-std::mt19937_64 &global_rng() {
-  static std::mt19937_64 rng{std::random_device{}()};
-  return rng;
-}
-} // namespace
-
-// FIXME: not thread-safe + doesn't affect CuRand
-void manual_seed(uint64_t seed) { global_rng().seed(seed); }
 
 std::shared_ptr<Storage> uniform(py::ssize_t n, Dtype dtype, Device device) {
   auto storage = zeros(n, dtype, Device::Cpu);

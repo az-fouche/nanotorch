@@ -24,8 +24,8 @@ find_package(CUDAToolkit REQUIRED)
 pybind11_add_module(_C MODULE 
     src/cpp/_C.cpp 
     src/cpp/storage.cpp
-    src/cpp/factory.cpp
-    src/cpp/ops/cuda.cpp
+    src/cpp/factory.cu
+    src/cpp/cuda.cpp
     src/cpp/ops/matmul.cu
     src/cpp/ops/copy_ops.cu
     src/cpp/ops/binary_ops.cu

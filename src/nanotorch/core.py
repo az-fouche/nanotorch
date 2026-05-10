@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from types import EllipsisType
 from typing import TYPE_CHECKING, Any, Sequence
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 
 from ._data_type import (
     Dtype,

@@ -3,7 +3,7 @@
 import math
 from typing import Literal
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 
 from . import _data_type as dt
 from ._device import Device, DeviceLiteral, get_std_device

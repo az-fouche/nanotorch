@@ -1,6 +1,6 @@
 """Unary differentiable tensor operations and their derivative."""
 
-from nanotorch import _C
+from nanotorch import _C  # type: ignore[missing-import]
 from nanotorch._data_type import Dtype, promote_dtypes
 from nanotorch.core import Tensor
 

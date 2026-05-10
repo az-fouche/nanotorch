@@ -1,12 +1,12 @@
 #pragma once
 
-#include <random>
-
 #include <pybind11/pybind11.h>
 
 #include "helpers.h"
+#include "random.h"
 #include "storage.h"
 #include "tensor_view.h"
+
 
 namespace py = pybind11;
 

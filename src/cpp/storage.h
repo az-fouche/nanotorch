@@ -10,8 +10,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "cuda.h"
 #include "dtype.h"
-#include "ops/cuda.h"
+
 
 [[noreturn]] inline void nt_unreachable() {
 #if defined(_MSC_VER) && !defined(__clang__)
