@@ -1,6 +1,10 @@
 """Tensor operations as non-member functions."""
 
+from nanotorch import _C
+
 from . import autograd
+from ._data_type import promote_dtypes
+from ._indexing import broadcast_shapes
 from .core import Dtype, Tensor, TensorShape, inherit_doc
 
 
@@ -141,3 +145,30 @@ def sqrt(x: Tensor) -> Tensor:
 @inherit_doc(autograd.SigmoidOp)
 def sigmoid(x: Tensor) -> Tensor:
     return autograd.SigmoidOp.apply(x)
+
+
+# Protected
+
+
+def _equal_op(x1: Tensor, x2: Tensor) -> Tensor:
+    dtype = promote_dtypes(x1.dtype, x2.dtype)
+    shape = broadcast_shapes(x1.shape, x2.shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
+    return Tensor._new_contiguous(_C.pw_equal(x1._C_view, x2._C_view), x1.shape)
+
+
+def _greater_op(x1: Tensor, x2: Tensor) -> Tensor:
+    dtype = promote_dtypes(x1.dtype, x2.dtype)
+    shape = broadcast_shapes(x1.shape, x2.shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
+    return Tensor._new_contiguous(_C.pw_greater(x1._C_view, x2._C_view), x1.shape)
+
+
+def _greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
+    dtype = promote_dtypes(x1.dtype, x2.dtype)
+    shape = broadcast_shapes(x1.shape, x2.shape)
+    x1 = x1.to(dtype).expand(*shape)
+    x2 = x2.to(dtype).expand(*shape)
+    return Tensor._new_contiguous(_C.pw_greater_eq(x1._C_view, x2._C_view), x1.shape)

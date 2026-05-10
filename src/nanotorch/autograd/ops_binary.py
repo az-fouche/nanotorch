@@ -226,30 +226,6 @@ class MatmulOp(Function):
         )
 
 
-def equal_op(x1: Tensor, x2: Tensor) -> Tensor:
-    dtype = promote_dtypes(x1.dtype, x2.dtype)
-    shape = broadcast_shapes(x1.shape, x2.shape)
-    x1 = x1.to(dtype).expand(*shape)
-    x2 = x2.to(dtype).expand(*shape)
-    return Tensor._new_contiguous(_C.pw_equal(x1._C_view, x2._C_view), x1.shape)
-
-
-def greater_op(x1: Tensor, x2: Tensor) -> Tensor:
-    dtype = promote_dtypes(x1.dtype, x2.dtype)
-    shape = broadcast_shapes(x1.shape, x2.shape)
-    x1 = x1.to(dtype).expand(*shape)
-    x2 = x2.to(dtype).expand(*shape)
-    return Tensor._new_contiguous(_C.pw_greater(x1._C_view, x2._C_view), x1.shape)
-
-
-def greater_eq_op(x1: Tensor, x2: Tensor) -> Tensor:
-    dtype = promote_dtypes(x1.dtype, x2.dtype)
-    shape = broadcast_shapes(x1.shape, x2.shape)
-    x1 = x1.to(dtype).expand(*shape)
-    x2 = x2.to(dtype).expand(*shape)
-    return Tensor._new_contiguous(_C.pw_greater_eq(x1._C_view, x2._C_view), x1.shape)
-
-
 def _binary_kernel_op(
     x1: Tensor,
     x2: Tensor,
