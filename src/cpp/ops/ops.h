@@ -6,7 +6,6 @@
 
 namespace py = pybind11;
 
-bool equals(const TensorView &x1, const TensorView &x2);
 void copy_view(const TensorView &src, const TensorView &out);
 std::shared_ptr<Storage> clone_contiguous_view_from(const TensorView &src);
 void scatter_to_axes(const TensorView &src, const TensorView &out,

@@ -1,6 +1,7 @@
 """Usual tensor factories."""
 
 import math
+from typing import Literal
 
 from nanotorch import _C
 
@@ -15,7 +16,7 @@ def tensor(
     *,
     dtype: Dtype | None = None,
     requires_grad: bool = False,
-    device: Device = Device.Cpu,
+    device: Device | Literal["cpu", "cuda"] = Device.Cpu,
 ) -> Tensor:
     return Tensor(data, dtype=dtype, requires_grad=requires_grad, device=device)
 

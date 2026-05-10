@@ -3,27 +3,6 @@
 
 // Ops
 
-bool equals(const TensorView &x1, const TensorView &x2) {
-  _require_cpu(x1, "_C.equals");
-  _require_cpu(x2, "_C.equals");
-  _require_same_shape(x1, x2, "equals");
-  _require_same_dtype(x1.storage, x2.storage, "equals");
-  _require_same_device(x1.storage, x2.storage, "equals");
-  auto ndim = static_cast<py::ssize_t>(x1.shape.size());
-  auto numel = numel_from_shape(x1.shape);
-  return DispatchAll::run(x1.storage->dtype(), [&]<class T>() {
-    auto *ptr_in1 = static_cast<const T *>(x1.storage->data());
-    auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
-    for (py::ssize_t i = 0; i < numel; ++i) {
-      auto idx1 = unravel(i, x1);
-      auto idx2 = unravel(i, x2);
-      if (ptr_in1[idx1] != ptr_in2[idx2])
-        return false;
-    }
-    return true;
-  });
-}
-
 void scatter_to_axes(const TensorView &src, const TensorView &out,
                      const std::vector<py::ssize_t> &fancy_dims_in_src,
                      const std::vector<TensorView> &fancy_dims_data,
@@ -244,8 +223,6 @@ void bind_ops_(py::module_ &m) {
       "to", [](const Storage &s, Device d) { return s.to(d); },
       "Move a storage to another device.", py::arg("storage"),
       py::arg("device"));
-  m.def("equals", &equals, "Test the per-coef equality of two tensors.",
-        py::arg("x1"), py::arg("x2"));
   m.def("copy_view", &copy_view, "Copy source view into target view.",
         py::arg("src"), py::arg("out"));
   m.def("clone_contiguous_view_from", &clone_contiguous_view_from,

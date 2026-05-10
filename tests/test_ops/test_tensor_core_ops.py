@@ -455,6 +455,20 @@ def test_tensor_equals_2d_intindex_slice():
     assert x[2].equals(xt2)
 
 
+@requires_cuda
+def test_tensor_unequal_cuda():
+    x = nt.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], device="cuda")
+    y = nt.tensor([1, 2, 2, 4, 5, 6, 7, 8, 9, 10], device="cuda")
+    assert not x.equals(y)
+
+
+@requires_cuda
+def test_tensor_equal_cuda():
+    x = nt.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], device="cuda")
+    y = nt.tensor([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], device="cuda")
+    assert x.equals(y)
+
+
 # Transpose
 
 

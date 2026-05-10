@@ -295,7 +295,7 @@ def test_ops_vs_expected_cuda(self, other, op, result):
         self = self.to("cuda")
     if isinstance(other, nt.Tensor):
         other = other.to("cuda")
-    assert op(self, other).cpu().equals(result)
+    assert op(self, other).equals(result.to("cuda"))
 
 
 def test_matmul_invalid_1d_wrongside():
