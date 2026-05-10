@@ -4,9 +4,11 @@
 #include "ops/inplace_ops.h"
 #include "ops/matmul.h"
 #include "ops/ops.h"
+#include "ops/reduction_ops.h"
 #include "ops/unary_ops.h"
 #include "storage.h"
 #include "tensor_view.h"
+
 
 PYBIND11_MODULE(_C, m) {
   m.doc() = "nanotorch C++ core module.";
@@ -19,4 +21,5 @@ PYBIND11_MODULE(_C, m) {
   bind_inplace_ops_(m);
   bind_matmul_op_(m);
   bind_unary_ops_(m);
+  bind_reduction_ops_(m);
 }

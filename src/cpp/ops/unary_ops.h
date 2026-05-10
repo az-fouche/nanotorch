@@ -4,9 +4,6 @@
 #include "storage.h"
 #include "tensor_view.h"
 
-std::shared_ptr<Storage> sum(const TensorView &x,
-                             const std::vector<py::ssize_t> &axis_drop,
-                             Dtype dtype);
 std::shared_ptr<Storage> exp(const TensorView &x);
 std::shared_ptr<Storage> log(const TensorView &x);
 std::shared_ptr<Storage> pow(const TensorView &x, Scalar value);

@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+add_compile_definitions(NOMINMAX)
+
 find_package(Python REQUIRED COMPONENTS Interpreter Development.Module)
 execute_process(
     COMMAND "${Python_EXECUTABLE}" -m pybind11 --cmakedir
@@ -24,10 +26,11 @@ pybind11_add_module(_C MODULE
     src/cpp/storage.cpp
     src/cpp/factory.cpp
     src/cpp/ops/cuda.cpp
-    src/cpp/ops/binary_ops.cu
-    src/cpp/ops/inplace_ops.cu
     src/cpp/ops/matmul.cu
     src/cpp/ops/ops.cu
+    src/cpp/ops/binary_ops.cu
+    src/cpp/ops/inplace_ops.cu
+    src/cpp/ops/reduction_ops.cu
     src/cpp/ops/unary_ops.cu
 )
 target_include_directories(_C PRIVATE src/cpp)
