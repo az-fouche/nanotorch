@@ -158,6 +158,10 @@ class MaxOp(Function):
             new_shape = tuple(s for i, s in enumerate(x.shape) if i not in self._axis)
 
         if x.is_empty:
+            if math.prod(new_shape) != 0:
+                raise IndexError(
+                    "argmin() expects reduction dim to be specified for numel=0."
+                )
             return Tensor._new_contiguous(
                 _C.zeros(math.prod(new_shape), x.dtype, x.device), new_shape
             )
@@ -216,6 +220,10 @@ class MinOp(Function):
             new_shape = tuple(s for i, s in enumerate(x.shape) if i not in self._axis)
 
         if x.is_empty:
+            if math.prod(new_shape) != 0:
+                raise IndexError(
+                    "argmin() expects reduction dim to be specified for numel=0."
+                )
             return Tensor._new_contiguous(
                 _C.zeros(math.prod(new_shape), x.dtype, x.device), new_shape
             )

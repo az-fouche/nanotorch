@@ -162,7 +162,8 @@ class Tensor:
             index = (index,)
         if self.ndim == 0:
             raise IndexError("Cannot index a scalar value.")
-        if len([x for x in index if x is not None]) > self.ndim:
+        n_real = sum(1 for x in index if x is not None and x is not Ellipsis)
+        if n_real > self.ndim:
             raise IndexError(f"Too many indices ({len(index)}) for {self.ndim}D array.")
 
         index = expand_ellipsis(index, self.shape)

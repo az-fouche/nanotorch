@@ -5,7 +5,6 @@ import math
 from nanotorch import _C
 from nanotorch._data_type import Dtype
 from nanotorch._indexing import TensorShape
-from nanotorch.autograd.ops_utils import broadcast_axis
 from nanotorch.core import Tensor
 
 from . import autograd
@@ -153,16 +152,14 @@ def sigmoid(x: Tensor) -> Tensor:
     return autograd.SigmoidOp.apply(x)
 
 
-def argmin(
-    x: Tensor, axis: int | TensorShape | None = None, keepdim: bool = False
-) -> Tensor:
+def argmin(x: Tensor, axis: int | None = None, keepdim: bool = False) -> Tensor:
     """Computes the index of the min value along one or more axes.
 
     Parameters
     ----------
     x: Tensor
         Target tensor.
-    axis: int | tuple[int, ...] | None
+    axis: int | None
         Axes index to min along, integer is interpreted as (n,), None as all axes.
         Dimensions of these axes are collapsed by the operation.
     keepdim: bool
@@ -173,28 +170,35 @@ def argmin(
     Tensor
         New tensor of containing the min coefficients.
     """
-    axis = broadcast_axis(axis, x)
-    if keepdim:
-        new_shape = tuple(1 if i in axis else s for i, s in enumerate(x.shape))
+    if isinstance(axis, int):
+        full_axis = (axis,)
+    elif axis is None:
+        full_axis = tuple(range(x.ndim))
     else:
-        new_shape = tuple(s for i, s in enumerate(x.shape) if i not in axis)
+        raise ValueError(f"Axis must be int or None, found {type(axis)}")
+    if keepdim:
+        new_shape = tuple(1 if i in full_axis else s for i, s in enumerate(x.shape))
+    else:
+        new_shape = tuple(s for i, s in enumerate(x.shape) if i not in full_axis)
     if x.is_empty:
+        if math.prod(new_shape) != 0:
+            raise IndexError(
+                "argmin() expects reduction dim to be specified for numel=0."
+            )
         return Tensor._new_contiguous(
             _C.zeros(math.prod(new_shape), x.dtype, x.device), new_shape
         )
-    return Tensor._new_contiguous(_C.argmin(x._C_view, axis), new_shape)
+    return Tensor._new_contiguous(_C.argmin(x._C_view, full_axis), new_shape)
 
 
-def argmax(
-    x: Tensor, axis: int | TensorShape | None = None, keepdim: bool = False
-) -> Tensor:
+def argmax(x: Tensor, axis: int | None = None, keepdim: bool = False) -> Tensor:
     """Computes the index of the max value along one or more axes.
 
     Parameters
     ----------
     x: Tensor
         Target tensor.
-    axis: int | tuple[int, ...] | None
+    axis: int | None
         Axes index to max along, integer is interpreted as (n,), None as all axes.
         Dimensions of these axes are collapsed by the operation.
     keepdim: bool
@@ -205,16 +209,25 @@ def argmax(
     Tensor
         New tensor of containing the max coefficients.
     """
-    axis = broadcast_axis(axis, x)
-    if keepdim:
-        new_shape = tuple(1 if i in axis else s for i, s in enumerate(x.shape))
+    if isinstance(axis, int):
+        full_axis = (axis,)
+    elif axis is None:
+        full_axis = tuple(range(x.ndim))
     else:
-        new_shape = tuple(s for i, s in enumerate(x.shape) if i not in axis)
+        raise ValueError(f"Axis must be int or None, found {type(axis)}")
+    if keepdim:
+        new_shape = tuple(1 if i in full_axis else s for i, s in enumerate(x.shape))
+    else:
+        new_shape = tuple(s for i, s in enumerate(x.shape) if i not in full_axis)
     if x.is_empty:
+        if math.prod(new_shape) != 0:
+            raise IndexError(
+                "argmax() expects reduction dim to be specified for numel=0."
+            )
         return Tensor._new_contiguous(
             _C.zeros(math.prod(new_shape), x.dtype, x.device), new_shape
         )
-    return Tensor._new_contiguous(_C.argmax(x._C_view, axis), new_shape)
+    return Tensor._new_contiguous(_C.argmax(x._C_view, full_axis), new_shape)
 
 
 # Protected
