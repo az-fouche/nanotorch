@@ -9,7 +9,9 @@ from .autograd import (
     ExpOp,
     LogOp,
     MatmulOp,
+    MaxOp,
     MeanOp,
+    MinOp,
     MulOp,
     NegOp,
     PowOp,
@@ -158,14 +160,16 @@ Tensor.__le__ = lambda self, other: _totensor(other, anchor=self) >= self
 Tensor.exp = lambda self: ExpOp.apply(self)
 Tensor.log = lambda self: LogOp.apply(self)
 Tensor.pow = lambda self, exponent: PowOp.apply(self, exponent)
-Tensor.sum = lambda self, axis=None, keepdim=False, dtype=None: SumOp.apply(
-    self, axis, keepdim, dtype
-)
 Tensor.mean = lambda self, axis=None, keepdim=False, dtype=None: MeanOp.apply(
     self, axis, keepdim, dtype
 )
 Tensor.reshape = lambda self, *dims: ReshapeOp.apply(self, *dims)
 Tensor.expand = lambda self, *dims: ExpandOp.apply(self, *dims)
 Tensor.transpose = lambda self, dim0, dim1: TransposeOp.apply(self, dim0, dim1)
+Tensor.sum = lambda self, axis=None, keepdim=False, dtype=None: SumOp.apply(
+    self, axis, keepdim, dtype
+)
+Tensor.max = lambda self, axis=None, keepdim=False: MaxOp.apply(self, axis, keepdim)
+Tensor.min = lambda self, axis=None, keepdim=False: MinOp.apply(self, axis, keepdim)
 
 Tensor.__hash__ = None  # Necessary for __eq__ semantics

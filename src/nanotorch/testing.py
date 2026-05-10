@@ -1,11 +1,17 @@
 from typing import Sequence
 
+import torch
+
 import nanotorch as nt
 from nanotorch.autograd import Function
 
 
 def assert_allclose(x1: nt.Tensor, x2: nt.Tensor, tol: float = 1e-6) -> None:
     """Asserts x1 and x2 are identical tensor up to $tol difference."""
+    if isinstance(x1, torch.Tensor):
+        x1 = nt.Tensor(x1)  # type: ignore
+    if isinstance(x2, torch.Tensor):
+        x2 = nt.Tensor(x2)  # type: ignore
     if x1.shape != x2.shape:
         raise AssertionError("Shapes do not match!")
     x1f, x2f = x1.flatten().tolist(), x2.flatten().tolist()

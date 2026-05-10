@@ -38,6 +38,8 @@ target_link_libraries(_C PRIVATE CUDA::cudart)
 target_compile_options(_C PRIVATE 
     $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:MSVC>>:/W4>
     $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-Wall -Wextra -Wpedantic>
+    $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+    $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=/Zc:preprocessor>
 )
 
 install(TARGETS _C DESTINATION nanotorch)

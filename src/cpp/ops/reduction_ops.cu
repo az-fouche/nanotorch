@@ -11,6 +11,22 @@ struct SumOp {
     return a + b;
   }
 };
+struct MinOp {
+  template <class O> static constexpr __host__ __device__ O neutral() {
+    return cuda::std::numeric_limits<O>::max();
+  }
+  template <class O> static __host__ __device__ O combine(O a, O b) {
+    return (a < b) ? a : b;
+  }
+};
+struct MaxOp {
+  template <class O> static constexpr __host__ __device__ O neutral() {
+    return cuda::std::numeric_limits<O>::lowest();
+  }
+  template <class O> static __host__ __device__ O combine(O a, O b) {
+    return (a < b) ? b : a;
+  }
+};
 
 template <class T, class O, class Op>
 std::shared_ptr<Storage>
@@ -123,9 +139,23 @@ std::shared_ptr<Storage> sum(const TensorView &x,
   return _generic_reduction<SumOp>(x, axis_drop, dtype);
 }
 
+std::shared_ptr<Storage> min(const TensorView &x,
+                             const std::vector<py::ssize_t> &axis_drop) {
+  return _generic_reduction<MinOp>(x, axis_drop, x.storage->dtype());
+}
+
+std::shared_ptr<Storage> max(const TensorView &x,
+                             const std::vector<py::ssize_t> &axis_drop) {
+  return _generic_reduction<MaxOp>(x, axis_drop, x.storage->dtype());
+}
+
 } // namespace nt
 
 void bind_reduction_ops_(py::module_ &m) {
   m.def("sum", &nt::sum, "Sum all elements in a tensor.", py::arg("x"),
         py::arg("axis"), py::arg("dtype"));
+  m.def("min", &nt::min, "Compute the max over all elements in a tensor.",
+        py::arg("x"), py::arg("axis"));
+  m.def("max", &nt::max, "Compute the mean over all elements in a tensor.",
+        py::arg("x"), py::arg("axis"));
 }

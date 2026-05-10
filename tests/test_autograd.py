@@ -185,6 +185,8 @@ def test_no_grad():
         ag.TanhOp,
         ag.TransposeOp,
         ag.TrueDivOp,
+        ag.MinOp,
+        ag.MaxOp,
     ],
 )
 def test_ops_specs(op: type[ag.Function]):
