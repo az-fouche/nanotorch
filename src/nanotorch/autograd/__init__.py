@@ -7,6 +7,30 @@ from .ops_reduction import MaxOp, MeanOp, MinOp, SumOp
 from .ops_special import ExpandOp, ReshapeOp, TOp, TransposeOp
 from .ops_unary import ExpOp, LogOp, NegOp, PowOp, ReluOp, SigmoidOp, SqrtOp, TanhOp
 
+ALL_OPS_ = [
+    AddOp,
+    ExpOp,
+    ExpandOp,
+    LogOp,
+    MatmulOp,
+    MeanOp,
+    MulOp,
+    NegOp,
+    PowOp,
+    ReluOp,
+    ReshapeOp,
+    SigmoidOp,
+    SqrtOp,
+    SubOp,
+    SumOp,
+    TOp,
+    TanhOp,
+    TransposeOp,
+    TrueDivOp,
+    MinOp,
+    MaxOp,
+]
+
 __all__ = [
     "AddOp",
     "ExpandOp",

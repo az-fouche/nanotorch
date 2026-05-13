@@ -23,4 +23,6 @@ inline bool is_cuda_available() {
   return err == cudaSuccess && count > 0;
 }
 
+inline void cuda_sync() { cudaDeviceSynchronize(); }
+
 void bind_cuda_(py::module_ &m);

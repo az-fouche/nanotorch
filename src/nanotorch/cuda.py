@@ -8,9 +8,14 @@ Device = _C.Device
 DeviceLiteral = Literal["cpu", "cuda"]
 
 
-def is_cuda_available() -> bool:
+def is_available() -> bool:
     """Detect if a CUDA device is ready to be used."""
     return _C.is_cuda_available()
+
+
+def sync() -> None:
+    """Forces a CUDA sync."""
+    _C.cuda_sync()
 
 
 def get_std_device(device: Device | str) -> Device:

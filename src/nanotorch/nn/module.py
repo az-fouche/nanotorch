@@ -5,9 +5,9 @@ from __future__ import annotations
 import math
 from typing import Any, Sequence
 
-from nanotorch._device import Device
 from nanotorch.autograd import ReluOp
 from nanotorch.core import Tensor
+from nanotorch.cuda import Device
 from nanotorch.factories import rand, zeros
 
 

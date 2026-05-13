@@ -6,8 +6,8 @@ from typing import Literal
 from nanotorch import _C  # type: ignore[missing-import]
 
 from . import _data_type as dt
-from ._device import Device, DeviceLiteral, get_std_device
 from .core import Dtype, InputType, Tensor, inherit_doc
+from .cuda import Device, DeviceLiteral, get_std_device
 
 
 @inherit_doc(Tensor)

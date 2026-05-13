@@ -18,13 +18,13 @@ from ._data_type import (
     is_int,
     promote_dtypes,
 )
-from ._device import Device, DeviceLiteral, get_std_device
 from ._indexing import (
     TensorShape,
     broadcast_shapes,
     expand_ellipsis,
     is_contiguous_view,
 )
+from .cuda import Device, DeviceLiteral, get_std_device
 
 if TYPE_CHECKING:
     from nanotorch.autograd import Function

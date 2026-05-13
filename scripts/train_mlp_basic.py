@@ -23,8 +23,8 @@ def main():
 
     device = args.device
     if device is None:
-        device = "cuda" if nt.is_cuda_available() else "cpu"
-    if device == "cuda" and not nt.is_cuda_available():
+        device = "cuda" if nt.is_available() else "cpu"
+    if device == "cuda" and not nt.is_available():
         raise RuntimeError("No CUDA device detected.")
 
     X: nt.Tensor = nt.rand(N_SAMPLES, N_FEATURES).to(device)

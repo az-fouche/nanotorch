@@ -7,7 +7,7 @@ import nanotorch as nt
 import nanotorch.autograd as ag
 from nanotorch import testing
 from nanotorch.autograd import ops_spec as sp
-from nanotorch.core import Tensor, TensorLike
+from nanotorch.core import Tensor
 
 nt.manual_seed(42)
 
@@ -163,140 +163,16 @@ def test_no_grad():
 # Autograd engine autocheck
 
 
-@pytest.mark.parametrize(
-    "op",
-    [
-        ag.AddOp,
-        ag.ExpOp,
-        ag.ExpandOp,
-        ag.LogOp,
-        ag.MatmulOp,
-        ag.MeanOp,
-        ag.MulOp,
-        ag.NegOp,
-        ag.PowOp,
-        ag.ReluOp,
-        ag.ReshapeOp,
-        ag.SigmoidOp,
-        ag.SqrtOp,
-        ag.SubOp,
-        ag.SumOp,
-        ag.TOp,
-        ag.TanhOp,
-        ag.TransposeOp,
-        ag.TrueDivOp,
-        ag.MinOp,
-        ag.MaxOp,
-    ],
-)
+@pytest.mark.parametrize("op", ag.ALL_OPS_)
 def test_ops_specs(op: type[ag.Function]):
     nt.manual_seed(42)
     random.seed(42)
     for _ in range(5):
-        inputs = []
-        for input_ in op.op_spec:
-            domain = input_.domain
-            if isinstance(domain, (sp.Bool, sp.Real)):
-                inputs.append(_gen_float_like(input_, inputs))
-            else:
-                inputs.extend(_gen_axis_like(domain, inputs))
-        tensor_in = [x for x in inputs if isinstance(x, Tensor)]
+        inputs = sp.gen_random_input_for(op.op_spec, max_dim=5, size_factor=1)
+        tensor_in = [
+            x.to(nt.float64) if x.dtype == nt.float32 else x
+            for x in inputs
+            if isinstance(x, Tensor)
+        ]
         extra_args = [x for x in inputs if not isinstance(x, Tensor)]
         testing.gradcheck(op, *tensor_in, extra_args=extra_args)
-
-
-def _gen_float_like(input_: sp.Input, inputs: list[TensorLike]) -> TensorLike:
-    if input_.kind == "scalar":
-        assert input_.shape is None
-        shape = ()
-    elif isinstance(input_.shape, sp.AnyShape):
-        ndim = random.randint(input_.shape.min_ndim, 5)
-        shape = nt.randint(1, 6, (ndim,)).tolist()
-    elif isinstance(input_.shape, sp.BroadcastableTo):
-        ref = inputs[input_.shape.ref]
-        assert isinstance(ref, Tensor)
-        ndim = random.randint(0, ref.ndim + 1)
-        suffix = ref.shape[ref.ndim - ndim :]
-        shape = [1 if random.random() < 0.5 else ax for ax in suffix]
-    elif isinstance(input_.shape, sp.MatmulBroadcast):
-        ref = inputs[input_.shape.ref]
-        assert isinstance(ref, Tensor)
-        shape = [1 if random.random() < 0.5 else ax for ax in ref.shape[:-2]]
-        shape += [ref.shape[-1], random.randint(1, 8)]
-    else:
-        raise AssertionError(f"Unhandled shape spec: {input_.shape}")
-    if isinstance(shape, int):
-        shape = (shape,)
-    if isinstance(shape, list):
-        shape = tuple(shape)
-    assert isinstance(shape, tuple)
-
-    if isinstance(input_.domain, sp.Real):
-        dtype = nt.float64
-    elif isinstance(input_.domain, sp.Bool):
-        dtype = nt.bool_
-    else:
-        raise ValueError(f"Unrecognized type {input_.domain}")
-    x = nt.rand(*shape, dtype=nt.float64, requires_grad=False).to(dtype)
-
-    if isinstance(input_.domain, sp.Real):
-        x = (input_.domain.high - input_.domain.low) * x + input_.domain.low
-    if input_.kind == "tensor":
-        x = x.clone()
-        x.enable_grad()
-    else:
-        x = x.item()
-    return x
-
-
-def _gen_axis_like(
-    domain: sp.InputDomain, inputs: list[TensorLike]
-) -> tuple[int, ...] | list[tuple[int, ...]]:
-    ref = inputs[domain.ref]  # type: ignore
-    assert isinstance(ref, Tensor)
-    if isinstance(domain, (sp.Axis, sp.AxisSet)):
-        naxes = (
-            1 if isinstance(domain, (sp.Axis)) else random.randint(domain.min, ref.ndim)
-        )
-        axes = tuple(random.sample(range(ref.ndim), naxes))
-        if isinstance(domain, sp.AxisSet) and not domain.split:
-            return [axes]
-        return axes
-    elif isinstance(domain, sp.AxisPermutation):
-        return tuple(random.sample(range(ref.ndim), ref.ndim))
-    elif isinstance(domain, sp.AxisReshape):
-        return _gen_reshape(ref)
-    elif isinstance(domain, sp.AxisExpand):
-        return _gen_expand(ref)
-    else:
-        raise AssertionError(f"Cannot handle domain {domain}")
-
-
-def _gen_reshape(ref: Tensor) -> tuple[int, ...]:
-    factors, n = [], math.prod(ref.shape)
-    p = 2
-    while p * p <= n:
-        while n % p == 0:
-            factors.append(p)
-            n //= p
-        p += 1
-    if n > 1:
-        factors.append(n)
-    ndim: int = 1 + random.randint(0, len(factors))
-    buckets = [1] * ndim
-    for f in factors:
-        buckets[random.randint(0, len(buckets) - 1)] *= f
-    buckets += [1] * random.randint(0, 5)
-    random.shuffle(buckets)
-    return tuple(buckets)  # type: ignore
-
-
-def _gen_expand(ref: Tensor) -> tuple[int, ...]:
-    shape = []
-    for ax in ref.shape[::-1]:
-        shape = [random.randint(1, 8) if ax == 1 else ax] + shape
-    while True:
-        shape = [random.randint(1, 8)] + shape
-        if random.random() < 0.5:
-            break
-    return tuple(shape)

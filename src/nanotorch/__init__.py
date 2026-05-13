@@ -2,7 +2,6 @@
 
 from . import _C  # type: ignore[missing-import]
 from ._data_type import Dtype, bool_, float32, float64, int32, int64
-from ._device import Device, is_cuda_available
 from .autograd import (
     AddOp,
     ExpandOp,
@@ -23,6 +22,7 @@ from .autograd import (
     no_grad,
 )
 from .core import Tensor, TensorLike
+from .cuda import Device, is_available
 from .factories import arange, eye, full, ones, rand, randint, tensor, zeros
 from .ops import (
     add,
@@ -81,7 +81,7 @@ __all__ = [
     "gt",
     "int32",
     "int64",
-    "is_cuda_available",
+    "is_available",
     "leq",
     "log",
     "lt",

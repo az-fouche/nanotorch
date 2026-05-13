@@ -2,9 +2,7 @@ import pytest
 
 import nanotorch as nt
 
-requires_cuda = pytest.mark.skipif(
-    not nt.is_cuda_available(), reason="CUDA not available"
-)
+requires_cuda = pytest.mark.skipif(not nt.is_available(), reason="CUDA not available")
 
 
 @pytest.fixture(
@@ -13,7 +11,7 @@ requires_cuda = pytest.mark.skipif(
         pytest.param(
             "cuda",
             marks=pytest.mark.skipif(
-                not nt.is_cuda_available(), reason="CUDA not available"
+                not nt.is_available(), reason="CUDA not available"
             ),
         ),
     ]
