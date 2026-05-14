@@ -168,7 +168,9 @@ def test_ops_specs(op: type[ag.Function]):
     nt.manual_seed(42)
     random.seed(42)
     for _ in range(5):
-        inputs = sp.gen_random_input_for(op.op_spec, max_dim=5, size_factor=1)
+        inputs = sp.gen_random_input_for(
+            op.op_spec, min_ndim=0, max_ndim=5, size_factor=1
+        )
         tensor_in = [
             x.to(nt.float64) if x.dtype == nt.float32 else x
             for x in inputs

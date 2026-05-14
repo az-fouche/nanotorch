@@ -1,6 +1,7 @@
 """Profile the speed and FLOPS of all package operations."""
 
 import argparse
+import random
 import re
 import time
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ from nanotorch import Tensor
 from nanotorch import autograd as ag
 from nanotorch.autograd.ops_spec import gen_random_input_for
 
-N_CALLS = 100
+N_CALLS = 10
 
 CUDA_AVAILABLE = nt.cuda.is_available()
 
@@ -28,12 +29,16 @@ class ProfilingResults:
 
 def profile_op(op: type[ag.Function], device: str) -> float:
     """Profile the wall time of a single op."""
+    nt.manual_seed(42)
+    random.seed(42)
+    inputs = [
+        x.to(device) if isinstance(x, Tensor) else x
+        for x in gen_random_input_for(
+            op.op_spec, min_ndim=2, max_ndim=2, size_factor=1000
+        )
+    ]
     total_t = 0
     for i in range(N_CALLS):
-        inputs = [
-            x.to(device) if isinstance(x, Tensor) else x
-            for x in gen_random_input_for(op.op_spec, max_dim=3, size_factor=50)
-        ]
         nt.cuda.sync()
         t0 = time.time()
         op.apply(*inputs)
@@ -69,13 +74,14 @@ def main():
         op_name = op.__name__.lower()
         if not should_run(op_name, args.filter, args.E):
             continue
-        pbar.set_description(f"Profiling {op_name} (cpu)")
-        t_cpu = profile_op(op, "cpu")
-        if CUDA_AVAILABLE:
-            pbar.set_description(f"Profiling {op_name} (cuda)")
-            t_cuda = profile_op(op, "cuda")
-        else:
-            t_cuda = 0.0
+        with nt.no_grad():
+            pbar.set_description(f"Profiling {op_name} (cpu)")
+            t_cpu = profile_op(op, "cpu")
+            if CUDA_AVAILABLE:
+                pbar.set_description(f"Profiling {op_name} (cuda)")
+                t_cuda = profile_op(op, "cuda")
+            else:
+                t_cuda = 0.0
         results.append(
             ProfilingResults(op_name=op_name, cpu_wtime=t_cpu, cuda_wtime=t_cuda)
         )

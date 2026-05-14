@@ -87,28 +87,34 @@ InputDomain = Bool | Real | Axis | AxisSet | AxisPermutation | AxisReshape | Axi
 
 
 def gen_random_input_for(
-    op_spec: tuple[Input, ...], max_dim: int, size_factor: int
+    op_spec: tuple[Input, ...], *, min_ndim: int, max_ndim: int, size_factor: int
 ) -> list[TensorLike]:
     """Generate a valid op input based on the spec."""
     inputs = []
     for input_ in op_spec:
         domain = input_.domain
         if isinstance(domain, (Bool, Real)):
-            inputs.append(_gen_float_like_input(input_, inputs, max_dim, size_factor))
+            inputs.append(
+                _gen_float_like_input(input_, inputs, min_ndim, max_ndim, size_factor)
+            )
         else:
             inputs.extend(_gen_axis_like_input(domain, inputs))
     return inputs
 
 
 def _gen_float_like_input(
-    input_: Input, inputs: list[TensorLike], max_dim: int, size_factor: int
+    input_: Input,
+    inputs: list[TensorLike],
+    min_ndim: int,
+    max_ndim: int,
+    size_factor: int,
 ) -> TensorLike:
     """Generate a numeric tensor input based on the spec."""
     if input_.kind == "scalar":
         assert input_.shape is None
         shape = ()
     elif isinstance(input_.shape, AnyShape):
-        ndim = random.randint(input_.shape.min_ndim, max_dim)
+        ndim = random.randint(max(min_ndim, input_.shape.min_ndim), max_ndim)
         shape = randint(1 * size_factor, 8 * size_factor, (ndim,)).tolist()
     elif isinstance(input_.shape, BroadcastableTo):
         ref = inputs[input_.shape.ref]
