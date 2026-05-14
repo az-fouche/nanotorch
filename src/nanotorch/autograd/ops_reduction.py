@@ -73,6 +73,10 @@ class SumOp(Function):
         )
         return (grad_out.reshape(*old_shape_dim).expand(*self._orig_shape),)
 
+    @classmethod
+    def flops(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel
+
 
 class MeanOp(Function):
     """Averages the tensor elements along one or more axes.
@@ -128,6 +132,10 @@ class MeanOp(Function):
         return (
             grad_out.reshape(*old_shape_dim).expand(*self._orig_shape) / self._denom,
         )
+
+    @classmethod
+    def flops(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel  # generally numel_out << numel_in so ignoring it
 
 
 class MaxOp(Function):
@@ -195,6 +203,10 @@ class MaxOp(Function):
         mask *= 1 / mask.sum(axis=self._axis, keepdim=True)
         return (grad_out.reshape(*old_shape_dim).expand(*self._orig_shape) * mask,)
 
+    @classmethod
+    def flops(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel
+
 
 class MinOp(Function):
     """Computes the min along one or more axes.
@@ -260,3 +272,7 @@ class MinOp(Function):
         mask = x == min_.reshape(*old_shape_dim).expand(*self._orig_shape)
         mask *= 1 / mask.sum(axis=self._axis, keepdim=True)
         return (grad_out.reshape(*old_shape_dim).expand(*self._orig_shape) * mask,)
+
+    @classmethod
+    def flops(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel

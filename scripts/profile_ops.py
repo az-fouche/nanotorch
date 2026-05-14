@@ -13,7 +13,7 @@ from nanotorch import Tensor
 from nanotorch import autograd as ag
 from nanotorch.autograd.ops_spec import gen_random_input_for
 
-N_CALLS = 10
+N_CALLS = 20
 
 CUDA_AVAILABLE = nt.cuda.is_available()
 
@@ -23,20 +23,43 @@ class ProfilingResults:
     """Profiling results of a single spec."""
 
     op_name: str
-    cpu_wtime: float
-    cuda_wtime: float
+    cpu_flops: float
+    cuda_flops: float
 
 
-def profile_op(op: type[ag.Function], device: str) -> float:
+def profile_op_cpu(op: type[ag.Function]) -> float:
+    """Profile the wall time of a single op."""
+    nt.manual_seed(42)
+    random.seed(42)
+    inputs = gen_random_input_for(
+        op.op_spec, min_ndim=2, max_ndim=2, min_size=500, max_size=500
+    )
+    total_t = 0
+    flops = op.flops(*inputs)
+    if flops == 0:
+        return 0.0
+    for i in range(N_CALLS):
+        t0 = time.time()
+        op.apply(*inputs)
+        if i == 0:  # Skip warmup
+            continue
+        total_t += time.time() - t0
+    return flops / total_t
+
+
+def profile_op_cuda(op: type[ag.Function]) -> float:
     """Profile the wall time of a single op."""
     nt.manual_seed(42)
     random.seed(42)
     inputs = [
-        x.to(device) if isinstance(x, Tensor) else x
+        x.to("cuda") if isinstance(x, Tensor) else x
         for x in gen_random_input_for(
-            op.op_spec, min_ndim=2, max_ndim=2, size_factor=1000
+            op.op_spec, min_ndim=2, max_ndim=2, min_size=4000, max_size=4000
         )
     ]
+    flops = op.flops(*inputs)
+    if flops == 0:
+        return 0.0
     total_t = 0
     for i in range(N_CALLS):
         nt.cuda.sync()
@@ -46,7 +69,7 @@ def profile_op(op: type[ag.Function], device: str) -> float:
             continue
         nt.cuda.sync()
         total_t += time.time() - t0
-    return total_t
+    return flops / total_t
 
 
 def should_run(op_name: str, filter: str | None, regex: bool):
@@ -56,6 +79,19 @@ def should_run(op_name: str, filter: str | None, regex: bool):
     if not regex:
         return op_name.lower() == filter.lower()
     return re.search(filter, op_name) is not None
+
+
+def fmt_flops(flops: float) -> str:
+    """Human-readable flops."""
+    if flops > 1e12:
+        return f"{flops / 1e12:.2f}T"
+    elif flops > 1e9:
+        return f"{flops / 1e9:.2f}G"
+    elif flops > 1e6:
+        return f"{flops / 1e6:.2f}M"
+    elif flops > 1e3:
+        return f"{flops / 1e3:.2f}K"
+    return f"{flops:.2f}"
 
 
 def main():
@@ -76,21 +112,27 @@ def main():
             continue
         with nt.no_grad():
             pbar.set_description(f"Profiling {op_name} (cpu)")
-            t_cpu = profile_op(op, "cpu")
+            cpu_flops = profile_op_cpu(op)
             if CUDA_AVAILABLE:
                 pbar.set_description(f"Profiling {op_name} (cuda)")
-                t_cuda = profile_op(op, "cuda")
+                cuda_flops = profile_op_cuda(op)
             else:
-                t_cuda = 0.0
+                cuda_flops = 0.0
         results.append(
-            ProfilingResults(op_name=op_name, cpu_wtime=t_cpu, cuda_wtime=t_cuda)
+            ProfilingResults(
+                op_name=op_name, cpu_flops=cpu_flops, cuda_flops=cuda_flops
+            )
         )
-    hdr = f"{'op':<12} {'cpu (s)':>10} {'cuda (s)':>10} {'speedup':>10}"
+    hdr = f"{'op':<12} {'cpu (FLOPS)':>12} {'cuda (FLOPS)':>12} {'speedup':>12}"
     print(hdr)
     print("-" * len(hdr))
     for r in results:
-        sp = r.cpu_wtime / r.cuda_wtime if r.cuda_wtime else float("inf")
-        print(f"{r.op_name:<12} {r.cpu_wtime:>10.4f} {r.cuda_wtime:>10.4f} {sp:>9.1f}x")
+        sp = r.cuda_flops / r.cpu_flops if r.cpu_flops > 0 else float("inf")
+        print(
+            f"{r.op_name:<12} {fmt_flops(r.cpu_flops):>12} "
+            f"{fmt_flops(r.cuda_flops):>12} "
+            f"{sp:>10.1f}x"
+        )
 
 
 if __name__ == "__main__":

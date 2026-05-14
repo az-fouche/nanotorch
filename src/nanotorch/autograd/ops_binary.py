@@ -1,5 +1,6 @@
 """Binary differentiable tensor operations and their derivative."""
 
+import math
 from typing import Callable
 
 from nanotorch import _C  # type: ignore[missing-import]
@@ -48,6 +49,10 @@ class AddOp(Function):
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return tuple(unbroadcast(grad_out, shape) for shape in self._shapes)
 
+    @classmethod
+    def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        return math.prod(broadcast_shapes(x1.shape, x2.shape))
+
 
 class SubOp(Function):
     """Subtract two tensors component-wise with broadcast.
@@ -88,6 +93,10 @@ class SubOp(Function):
             unbroadcast(-1 * grad_out, s2),
         )
 
+    @classmethod
+    def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        return math.prod(broadcast_shapes(x1.shape, x2.shape))
+
 
 class MulOp(Function):
     """Multiply two tensors component-wise with broadcast.
@@ -127,6 +136,10 @@ class MulOp(Function):
             unbroadcast(x2 * grad_out, x1.shape),
             unbroadcast(x1 * grad_out, x2.shape),
         )
+
+    @classmethod
+    def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        return math.prod(broadcast_shapes(x1.shape, x2.shape))
 
 
 class TrueDivOp(Function):
@@ -169,6 +182,10 @@ class TrueDivOp(Function):
             unbroadcast(grad_out / x2, x1.shape),
             unbroadcast(-x1 / x2**2 * grad_out, x2.shape),
         )
+
+    @classmethod
+    def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        return math.prod(broadcast_shapes(x1.shape, x2.shape))
 
 
 class MatmulOp(Function):
@@ -224,6 +241,12 @@ class MatmulOp(Function):
             unbroadcast(grad_out @ x2_m.transpose(-2, -1), x1.shape).reshape(*x1.shape),
             unbroadcast(x1_m.transpose(-2, -1) @ grad_out, x2.shape).reshape(*x2.shape),
         )
+
+    @classmethod
+    def flops(cls, x1: Tensor, x2: Tensor) -> int:
+        shape1, shape2, _ = _matmul_broadcast(x1.shape, x2.shape)
+        B, M, N, K = math.prod(shape1[:-2]), shape1[-2], shape2[-1], shape1[-1]
+        return 2 * B * M * N * K
 
 
 def _binary_kernel_op(

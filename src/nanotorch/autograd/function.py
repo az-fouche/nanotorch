@@ -81,3 +81,8 @@ class Function:
     def backward(self, grad_out: Tensor) -> tuple[Tensor]:
         """Defines ops backward (op-specific)."""
         raise NotImplementedError
+
+    @classmethod
+    def flops(cls, *args: Any, **kwargs: Any) -> int:
+        """Returns the number of FLOPs for the computation of the input."""
+        return 0  # Default for metadata ops

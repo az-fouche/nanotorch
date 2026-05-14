@@ -160,16 +160,43 @@ def test_no_grad():
     assert y.grad_fn is None
 
 
+@pytest.mark.parametrize("op", ag.ALL_OPS_)
+def test_ops_flops(op: type[ag.Function]):
+    nt.manual_seed(42)
+    random.seed(42)
+    inputs = sp.gen_random_input_for(
+        op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8
+    )
+    assert op.flops(*inputs) >= 0
+
+
 # Autograd engine autocheck
 
 
 @pytest.mark.parametrize("op", ag.ALL_OPS_)
-def test_ops_specs(op: type[ag.Function]):
+def test_ops_specs_fast(op: type[ag.Function]):
     nt.manual_seed(42)
     random.seed(42)
-    for _ in range(5):
+    inputs = sp.gen_random_input_for(
+        op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8
+    )
+    tensor_in = [
+        x.to(nt.float64) if x.dtype == nt.float32 else x
+        for x in inputs
+        if isinstance(x, Tensor)
+    ]
+    extra_args = [x for x in inputs if not isinstance(x, Tensor)]
+    testing.gradcheck(op, *tensor_in, extra_args=extra_args)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("op", ag.ALL_OPS_)
+def test_ops_specs_extensive(op: type[ag.Function]):
+    nt.manual_seed(42)
+    random.seed(42)
+    for _ in range(100):
         inputs = sp.gen_random_input_for(
-            op.op_spec, min_ndim=0, max_ndim=5, size_factor=1
+            op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8
         )
         tensor_in = [
             x.to(nt.float64) if x.dtype == nt.float32 else x

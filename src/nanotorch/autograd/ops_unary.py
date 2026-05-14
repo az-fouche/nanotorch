@@ -14,7 +14,7 @@ class NegOp(Function):
 
     Parameters
     ----------
-    x1: Tensor
+    x: Tensor
         Tensor to invert coefficients (raises if bool).
 
     Returns
@@ -25,12 +25,16 @@ class NegOp(Function):
 
     op_spec = (sp.Input("tensor", sp.AnyShape(), sp.Real()),)
 
-    def forward(self, x1: Tensor) -> Tensor:
-        self._shape = x1.shape
-        return Tensor._new_contiguous(_C.neg(x1._C_view), x1.shape)
+    def forward(self, x: Tensor) -> Tensor:
+        self._shape = x.shape
+        return Tensor._new_contiguous(_C.neg(x._C_view), x.shape)
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (unbroadcast(-1 * grad_out, self._shape),)
+
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel
 
 
 class ExpOp(Function):
@@ -61,6 +65,10 @@ class ExpOp(Function):
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (grad_out * self.saved_tensors[0],)
 
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel
+
 
 class LogOp(Function):
     """Logarithmize (Napierian) all tensor coefficients.
@@ -88,6 +96,10 @@ class LogOp(Function):
 
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         return (grad_out * self.saved_tensors[0] ** -1,)
+
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel
 
 
 class SqrtOp(Function):
@@ -119,6 +131,10 @@ class SqrtOp(Function):
         sqrt_x = self.saved_tensors[0]
         return (grad_out * 0.5 * sqrt_x**-1,)
 
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel
+
 
 class TanhOp(Function):
     """Tanh of all tensor coefficients.
@@ -149,6 +165,10 @@ class TanhOp(Function):
         tanh_x = self.saved_tensors[0]
         return (grad_out * (1 - tanh_x**2),)
 
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel
+
 
 class SigmoidOp(Function):
     """Sigmoid of all tensor coefficients.
@@ -178,6 +198,10 @@ class SigmoidOp(Function):
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         sig_x = self.saved_tensors[0]
         return (grad_out * sig_x * (1 - sig_x),)
+
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel
 
 
 class PowOp(Function):
@@ -217,6 +241,10 @@ class PowOp(Function):
         x, exponent = self.saved_tensors
         return (grad_out * exponent * x ** (exponent - 1),)
 
+    @classmethod
+    def flops(cls, x: Tensor, exponent: Tensor) -> int:
+        return x.numel
+
 
 class ReluOp(Function):
     """Rectified linear unit."""
@@ -231,3 +259,7 @@ class ReluOp(Function):
     def backward(self, grad_out: Tensor) -> tuple[Tensor, ...]:
         result = self.saved_tensors[0]
         return (grad_out * (result > Tensor(0, device=result.device)),)
+
+    @classmethod
+    def flops(cls, x: Tensor) -> int:
+        return x.numel

@@ -87,7 +87,12 @@ InputDomain = Bool | Real | Axis | AxisSet | AxisPermutation | AxisReshape | Axi
 
 
 def gen_random_input_for(
-    op_spec: tuple[Input, ...], *, min_ndim: int, max_ndim: int, size_factor: int
+    op_spec: tuple[Input, ...],
+    *,
+    min_ndim: int,
+    max_ndim: int,
+    min_size: int,
+    max_size: int,
 ) -> list[TensorLike]:
     """Generate a valid op input based on the spec."""
     inputs = []
@@ -95,7 +100,9 @@ def gen_random_input_for(
         domain = input_.domain
         if isinstance(domain, (Bool, Real)):
             inputs.append(
-                _gen_float_like_input(input_, inputs, min_ndim, max_ndim, size_factor)
+                _gen_float_like_input(
+                    input_, inputs, min_ndim, max_ndim, min_size, max_size
+                )
             )
         else:
             inputs.extend(_gen_axis_like_input(domain, inputs))
@@ -107,7 +114,8 @@ def _gen_float_like_input(
     inputs: list[TensorLike],
     min_ndim: int,
     max_ndim: int,
-    size_factor: int,
+    min_size: int,
+    max_size: int,
 ) -> TensorLike:
     """Generate a numeric tensor input based on the spec."""
     if input_.kind == "scalar":
@@ -115,7 +123,7 @@ def _gen_float_like_input(
         shape = ()
     elif isinstance(input_.shape, AnyShape):
         ndim = random.randint(max(min_ndim, input_.shape.min_ndim), max_ndim)
-        shape = randint(1 * size_factor, 8 * size_factor, (ndim,)).tolist()
+        shape = randint(min_size, max_size, (ndim,)).tolist()
     elif isinstance(input_.shape, BroadcastableTo):
         ref = inputs[input_.shape.ref]
         assert isinstance(ref, Tensor)
@@ -126,7 +134,7 @@ def _gen_float_like_input(
         ref = inputs[input_.shape.ref]
         assert isinstance(ref, Tensor)
         shape = [1 if random.random() < 0.5 else ax for ax in ref.shape[:-2]]
-        shape += [ref.shape[-1], random.randint(1, 8)]
+        shape += [ref.shape[-1], random.randint(min_size, max_size)]
     else:
         raise AssertionError(f"Unhandled shape spec: {input_.shape}")
     if isinstance(shape, int):
