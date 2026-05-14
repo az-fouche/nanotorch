@@ -121,7 +121,7 @@ __global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
     // Storage step: fill [TILE_SIZE, TILE_SIZE] block buffers
     for (int offset = 0; offset < BLOCK_M; offset += STRIDE_A) {
       auto as_ioff = as_i + offset;
-      As[as_ioff * BLOCK_K + as_j] =
+      As[as_j * BLOCK_M + as_ioff] =
           (a_i + offset < M && block_start + as_j < K) ? A[as_ioff * K + as_j]
                                                        : T(0);
     }
@@ -135,7 +135,7 @@ __global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
     // Accumulate partial dot product on cached block
     for (int k = 0; k < BLOCK_K; ++k) {
       for (int i = 0; i < THREAD_M; ++i)
-        scratch_a[i] = As[(thread_i * THREAD_M + i) * BLOCK_K + k];
+        scratch_a[i] = As[thread_i * THREAD_M + i + BLOCK_M * k];
       for (int i = 0; i < THREAD_N; ++i)
         scratch_b[i] = Bs[k * BLOCK_N + thread_j * THREAD_N + i];
 
