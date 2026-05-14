@@ -82,8 +82,9 @@ _matmul_fallback(const T *A, const T *B, T *C, TensorViewStatic view_1,
 template <class T>
 __global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
                                py::ssize_t M, py::ssize_t N) {
-  auto i = blockIdx.x * blockDim.x + threadIdx.x;
-  auto j = blockIdx.y * blockDim.y + threadIdx.y;
+  auto tid = threadIdx.x;
+  auto i = blockIdx.x * TILE + (tid / TILE);
+  auto j = blockIdx.y * TILE + (tid % TILE);
   if (i >= M || j >= N)
     return;
 
@@ -116,7 +117,7 @@ _cuda_matmul(const TensorView &x1, const TensorView &x2, py::ssize_t ndim,
     for (py::ssize_t i = static_cast<py::ssize_t>(x1.shape.size() - 3); i >= 0;
          --i)
       batch *= x1.shape[i];
-    dim3 grid(n_partial_x, n_partial_y, batch), block(TILE, TILE, 1);
+    dim3 grid(n_partial_x, n_partial_y, batch), block(TILE * TILE);
     _matmul_contig<<<grid, block>>>(A, B, C, K, M, N);
     NT_CUDA_CHECK(cudaGetLastError());
   } else {
