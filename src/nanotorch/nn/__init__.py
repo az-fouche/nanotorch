@@ -1,6 +1,6 @@
 """Numerical optimization module."""
 
-from .module import Linear, Module, ReLU, Sequential
+from .module import Linear, Module, ReLU, Sequential, Tanh
 from .optimizers import GradientDescent
 
-__all__ = ["GradientDescent", "Linear", "Module", "ReLU", "Sequential"]
+__all__ = ["GradientDescent", "Linear", "Module", "ReLU", "Tanh", "Sequential"]

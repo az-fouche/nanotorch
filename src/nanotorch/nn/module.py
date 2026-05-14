@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any, Sequence
 
-from nanotorch.autograd import ReluOp
+from nanotorch.autograd import ReluOp, TanhOp
 from nanotorch.core import Tensor
 from nanotorch.cuda import Device
 from nanotorch.factories import rand, zeros
@@ -81,6 +81,13 @@ class ReLU(Module):
 
     def forward(self, x: Tensor) -> Tensor:
         return ReluOp.apply(x)
+
+
+class Tanh(Module):
+    """tanh(x) layer."""
+
+    def forward(self, x: Tensor) -> Tensor:
+        return TanhOp.apply(x)
 
 
 class Sequential(Module):

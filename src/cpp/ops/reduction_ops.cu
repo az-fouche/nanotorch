@@ -3,6 +3,8 @@
 
 namespace nt {
 
+constexpr py::ssize_t MAX_PARTIALS = 1024;
+
 template <class O> struct MatItem {
   py::ssize_t idx;
   O value;
@@ -11,21 +13,23 @@ template <class O> struct MatItem {
 struct ArgMinOp {
   static constexpr bool returns_idx = true;
   template <class O> static constexpr __host__ __device__ MatItem<O> neutral() {
-    return MatItem<O>(-1, cuda::std::numeric_limits<O>::max());
+    return MatItem<O>(std::numeric_limits<py::ssize_t>::max(),
+                      cuda::std::numeric_limits<O>::max());
   }
   template <class O>
   static __host__ __device__ MatItem<O> combine(MatItem<O> a, MatItem<O> b) {
-    return (a.value <= b.value) ? a : b;
+    return (a.value < b.value || (a.value == b.value && a.idx < b.idx)) ? a : b;
   }
 };
 struct ArgMaxOp {
   static constexpr bool returns_idx = true;
   template <class O> static constexpr __host__ __device__ MatItem<O> neutral() {
-    return MatItem<O>(-1, cuda::std::numeric_limits<O>::lowest());
+    return MatItem<O>(std::numeric_limits<py::ssize_t>::max(),
+                      cuda::std::numeric_limits<O>::lowest());
   }
   template <class O>
   static __host__ __device__ MatItem<O> combine(MatItem<O> a, MatItem<O> b) {
-    return (a.value >= b.value) ? a : b;
+    return (a.value > b.value || (a.value == b.value && a.idx < b.idx)) ? a : b;
   }
 };
 struct MinOp : ArgMinOp {
@@ -71,27 +75,56 @@ _generic_reduction_cpu(const TensorView &x, Dtype dtype,
   return storage_out;
 }
 
-template <class T, class O, class Op>
-__global__ void
-_sum_kernel(py::ssize_t n, const T *ptr_in,
-            std::conditional_t<Op::returns_idx, int64_t, O> *ptr_out,
-            TensorViewStatic view_keep, TensorViewStatic view_drop,
-            py::ssize_t numel_drop) {
-  // TODO: optimize the parallelization
-  auto i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i >= n)
-    return;
-  py::ssize_t base = unravel(i, view_keep);
-  auto acc = Op::template neutral<O>();
-  for (py::ssize_t j = 0; j < numel_drop; ++j) {
-    auto offset = unravel(j, view_drop);
-    acc =
-        Op::combine(acc, MatItem<O>(j, static_cast<O>(ptr_in[base + offset])));
-  }
-  if constexpr (Op::returns_idx)
-    ptr_out[i] = static_cast<int64_t>(acc.idx);
+template <class In, class O>
+__device__ MatItem<O> _as_item(const In &x, py::ssize_t j) {
+  if constexpr (std::is_same_v<In, MatItem<O>>)
+    return x;
   else
-    ptr_out[i] = acc.value;
+    return MatItem<O>(j, static_cast<O>(x));
+}
+
+template <class In, class O, class Op>
+__global__ void _reduce_kernel(const In *ptr_in, MatItem<O> *ptr_out,
+                               TensorViewStatic view_keep,
+                               TensorViewStatic view_drop,
+                               py::ssize_t numel_drop, py::ssize_t n_partials) {
+  auto tid = threadIdx.x;
+
+  // Each thread accumulates a strided chunk in the buffer
+  __shared__ MatItem<O> buffer[BLOCK_SIZE];
+  auto acc = Op::template neutral<O>();
+  py::ssize_t idx_in;
+  for (auto i_loc = blockIdx.y * BLOCK_SIZE + tid; i_loc < numel_drop;
+       i_loc += gridDim.y * BLOCK_SIZE) {
+    if constexpr (std::is_same_v<In, MatItem<O>>)
+      idx_in = blockIdx.x * numel_drop + i_loc;
+    else
+      idx_in = unravel(blockIdx.x, view_keep) + unravel(i_loc, view_drop);
+    acc = Op::combine(acc, _as_item<In, O>(ptr_in[idx_in], i_loc));
+  }
+  buffer[tid] = acc;
+  __syncthreads();
+
+  // Accumulate in buffer[0] with tree reduction
+  for (int s = BLOCK_SIZE / 2; s > 0; s >>= 1) {
+    if (tid < s)
+      buffer[tid] = Op::combine(buffer[tid], buffer[tid + s]);
+    __syncthreads();
+  }
+  if (tid == 0)
+    ptr_out[blockIdx.x * n_partials + blockIdx.y] = buffer[0];
+}
+
+template <class O, class OutT, class Op>
+__global__ void _extract_kernel(const MatItem<O> *ptr_in, OutT *ptr_out,
+                                py::ssize_t numel_keep) {
+  auto i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= numel_keep)
+    return;
+  if constexpr (Op::returns_idx)
+    ptr_out[i] = static_cast<OutT>(ptr_in[i].idx);
+  else
+    ptr_out[i] = static_cast<OutT>(ptr_in[i].value);
 }
 
 template <class T, class O, class Op>
@@ -100,13 +133,49 @@ _generic_reduction_cuda(const TensorView &x, Dtype dtype,
                         const TensorViewStatic &view_keep,
                         const TensorViewStatic &view_drop,
                         py::ssize_t numel_keep, py::ssize_t numel_drop) {
+  auto n_partials =
+      std::min((numel_drop + BLOCK_SIZE - 1) / BLOCK_SIZE, MAX_PARTIALS);
+  auto scratch_size = numel_keep * n_partials;
+  MatItem<O> *buf_a, *buf_b, *src, *dst;
+  NT_CUDA_CHECK(cudaMalloc(&buf_a, sizeof(MatItem<O>) * scratch_size));
+  NT_CUDA_CHECK(cudaMalloc(&buf_b, sizeof(MatItem<O>) * scratch_size));
+  src = buf_a;
+  dst = buf_b;
+
+  // Iterative BLOCK_SIZE reductions
+  bool is_first = true;
+  do {
+    dim3 grid(numel_keep, n_partials), block(BLOCK_SIZE);
+    if (is_first) {
+      _reduce_kernel<T, O, Op>
+          <<<grid, block>>>(static_cast<const T *>(x.storage->data()), buf_a,
+                            view_keep, view_drop, numel_drop, n_partials);
+      NT_CUDA_CHECK(cudaGetLastError());
+      is_first = false;
+      src = buf_a;
+      dst = buf_b;
+    } else {
+      _reduce_kernel<MatItem<O>, O, Op>
+          <<<grid, block>>>(src, dst, TensorViewStatic{}, TensorViewStatic{},
+                            numel_drop, n_partials);
+      NT_CUDA_CHECK(cudaGetLastError());
+      std::swap(src, dst);
+    }
+    numel_drop = n_partials;
+    n_partials =
+        std::min((n_partials + BLOCK_SIZE - 1) / BLOCK_SIZE, MAX_PARTIALS);
+  } while (numel_drop > 1);
+
+  // Gather final reduction to correct dtype
   Dtype storage_dt = Op::returns_idx ? Dtype::Int64 : dtype;
   auto storage_out = Storage::allocate(numel_keep, storage_dt, Device::Cuda);
   using OutT = std::conditional_t<Op::returns_idx, int64_t, O>;
   auto ptr_out = static_cast<OutT *>(storage_out->data());
-  launch_1d(numel_keep, _sum_kernel<T, O, Op>, numel_keep,
-            static_cast<const T *>(x.storage->data()), ptr_out, view_keep,
-            view_drop, numel_drop);
+  launch_1d(numel_keep, _extract_kernel<O, OutT, Op>, src, ptr_out, numel_keep);
+
+  NT_CUDA_CHECK(cudaFree(buf_a));
+  NT_CUDA_CHECK(cudaFree(buf_b));
+
   return storage_out;
 }
 

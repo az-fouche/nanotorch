@@ -1,5 +1,7 @@
 """Profile the speed and FLOPS of all package operations."""
 
+import argparse
+import re
 import time
 from dataclasses import dataclass
 
@@ -42,11 +44,31 @@ def profile_op(op: type[ag.Function], device: str) -> float:
     return total_t
 
 
+def should_run(op_name: str, filter: str | None, regex: bool):
+    """Detect if op name passes the filter."""
+    if filter is None:
+        return True
+    if not regex:
+        return op_name.lower() == filter.lower()
+    return re.search(filter, op_name) is not None
+
+
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--filter",
+        type=str,
+        default=None,
+        help="Filter ops name using this parameter.",
+    )
+    parser.add_argument("-E", action="store_true", help="Enable regex filtering.")
+    args = parser.parse_args()
     results = []
     pbar = tqdm.tqdm(ag.ALL_OPS_, ncols=80)
     for op in pbar:
         op_name = op.__name__.lower()
+        if not should_run(op_name, args.filter, args.E):
+            continue
         pbar.set_description(f"Profiling {op_name} (cpu)")
         t_cpu = profile_op(op, "cpu")
         if CUDA_AVAILABLE:

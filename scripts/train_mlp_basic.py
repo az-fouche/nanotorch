@@ -8,11 +8,11 @@ import nanotorch as nt
 import nanotorch.nn as nn
 
 N_SAMPLES = 200_000
-N_FEATURES = 32
+N_FEATURES = 256
 HIDDEN_SIZE = 256
 N_EPOCH = 50
 BATCH_SIZE = 1024
-LR = 5e-4
+LR = 1e-4
 
 
 def main():
@@ -28,15 +28,15 @@ def main():
         raise RuntimeError("No CUDA device detected.")
 
     X: nt.Tensor = nt.rand(N_SAMPLES, N_FEATURES).to(device)
-    y = (X.sum(axis=1) + 3.14).to(device)
+    y = (X @ nt.randint(-10, 10, (N_FEATURES,)).to(device) + 3.14).to(device)
 
     model = nn.Sequential(
         nn.Linear(N_FEATURES, HIDDEN_SIZE),
         nn.ReLU(),
         nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE),
-        nn.ReLU(),
+        nn.Tanh(),
         nn.Linear(HIDDEN_SIZE, HIDDEN_SIZE),
-        nn.ReLU(),
+        nn.Tanh(),
         nn.Linear(HIDDEN_SIZE, 1),
     ).to(device)
     optimizer = nn.GradientDescent(model.parameters(), lr=LR)
