@@ -54,7 +54,7 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
     inputs = [
         x.to("cuda") if isinstance(x, Tensor) else x
         for x in gen_random_input_for(
-            op.op_spec, min_ndim=2, max_ndim=2, min_size=6000, max_size=6000
+            op.op_spec, min_ndim=2, max_ndim=2, min_size=4000, max_size=4000
         )
     ]
     flops = op.flops(*inputs)

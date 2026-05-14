@@ -3,7 +3,10 @@
 
 namespace nt {
 
-constexpr int TILE_SIZE = 32;
+constexpr int TILE_M = 64;
+constexpr int TILE_N = 64;
+constexpr int TILE_K = 8;
+constexpr int ELEMS_PER_THREAD = 8;
 
 template <class T>
 std::shared_ptr<Storage>
@@ -81,44 +84,55 @@ _matmul_fallback(const T *A, const T *B, T *C, TensorViewStatic view_1,
 }
 
 // Nice tensor layout (most cases)
+// Ref: https://siboehm.com/articles/22/CUDA-MMM
 template <class T>
 __global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
                                py::ssize_t M, py::ssize_t N) {
-  auto block_idx_i = blockIdx.x * TILE_SIZE;
-  auto block_idx_j = blockIdx.y * TILE_SIZE;
-  auto thread_i = threadIdx.x / TILE_SIZE;
-  auto thread_j = threadIdx.x % TILE_SIZE;
+  auto block_idx_i = blockIdx.x * TILE_M;
+  auto block_idx_j = blockIdx.y * TILE_N;
+  auto thread_i = threadIdx.x / TILE_N;
+  auto thread_j = threadIdx.x % TILE_N;
   auto batch = blockIdx.z;
 
   A += batch * M * K + block_idx_i * K;
   B += batch * K * N + block_idx_j;
   C += batch * M * N + block_idx_i * N + block_idx_j;
 
-  T acc = 0;
-  auto a_i = block_idx_i + thread_i;
-  auto b_j = block_idx_j + thread_j;
-  __shared__ T As[TILE_SIZE * TILE_SIZE], Bs[TILE_SIZE * TILE_SIZE];
-  for (int block_start = 0; block_start < K; block_start += TILE_SIZE) {
+  __shared__ T As[TILE_M * TILE_K], Bs[TILE_K * TILE_N];
+  auto as_i = threadIdx.x / TILE_K; // Local coordinates in As/Bs
+  auto as_j = threadIdx.x % TILE_K;
+  auto bs_i = threadIdx.x / TILE_N;
+  auto bs_j = threadIdx.x % TILE_N;
+  auto a_i = block_idx_i + as_i; // Global coordinates in A/B
+  auto b_j = block_idx_j + bs_j;
+
+  T thread_acc[ELEMS_PER_THREAD] = {};
+  for (int block_start = 0; block_start < K; block_start += TILE_K) {
     // Fill [TILE_SIZE, TILE_SIZE] block buffers
-    auto a_j = block_start + thread_j;
-    auto b_i = block_start + thread_i;
-    As[thread_i * TILE_SIZE + thread_j] =
-        (a_i < M && a_j < K) ? A[thread_i * K + thread_j] : T(0);
-    Bs[thread_i * TILE_SIZE + thread_j] =
-        (b_i < K && b_j < N) ? B[thread_i * N + thread_j] : T(0);
+    auto a_j = block_start + as_j;
+    auto b_i = block_start + bs_i;
+    As[as_i * TILE_K + as_j] = (a_i < M && a_j < K) ? A[as_i * K + as_j] : T(0);
+    Bs[bs_i * TILE_N + bs_j] = (b_i < K && b_j < N) ? B[bs_i * N + bs_j] : T(0);
     __syncthreads();
 
     // Accumulate partial dot product on cached block
-    for (int k = 0; k < TILE_SIZE; ++k)
-      acc += As[thread_i * TILE_SIZE + k] * Bs[k * TILE_SIZE + thread_j];
+    for (int k = 0; k < TILE_K; ++k) {
+      T bkj = Bs[k * TILE_N + bs_j];
+      for (int p = 0; p < ELEMS_PER_THREAD; ++p)
+        thread_acc[p] +=
+            As[(thread_i * ELEMS_PER_THREAD + p) * TILE_K + k] * bkj;
+    }
 
     // Move to next block
-    A += TILE_SIZE;
-    B += TILE_SIZE * N;
+    A += TILE_K;
+    B += TILE_K * N;
     __syncthreads();
   }
-  if (block_idx_i + thread_i < M && block_idx_j + thread_j < N)
-    C[thread_i * N + thread_j] = acc;
+  for (int p = 0; p < ELEMS_PER_THREAD; ++p) {
+    if (block_idx_i + thread_i * ELEMS_PER_THREAD + p < M &&
+        block_idx_j + thread_j < N)
+      C[(thread_i * ELEMS_PER_THREAD + p) * N + thread_j] = thread_acc[p];
+  }
 }
 
 template <class T>
@@ -133,13 +147,14 @@ _cuda_matmul(const TensorView &x1, const TensorView &x2, py::ssize_t ndim,
   auto *B = static_cast<const T *>(x2.storage->data()) + x2.offset;
   auto C = static_cast<T *>(new_storage->data());
   if (is_contiguous(x1) && is_contiguous(x2)) {
-    auto n_partial_x = (M + TILE_SIZE - 1) / TILE_SIZE;
-    auto n_partial_y = (N + TILE_SIZE - 1) / TILE_SIZE;
+    auto n_partial_x = (M + TILE_M - 1) / TILE_M;
+    auto n_partial_y = (N + TILE_N - 1) / TILE_N;
     py::ssize_t batch = 1;
     for (py::ssize_t i = static_cast<py::ssize_t>(x1.shape.size() - 3); i >= 0;
          --i)
       batch *= x1.shape[i];
-    dim3 grid(n_partial_x, n_partial_y, batch), block(TILE_SIZE * TILE_SIZE);
+    dim3 grid(n_partial_x, n_partial_y, batch),
+        block(TILE_M * TILE_N / ELEMS_PER_THREAD);
     _matmul_contig<<<grid, block>>>(A, B, C, K, M, N);
     NT_CUDA_CHECK(cudaGetLastError());
   } else {
