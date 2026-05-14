@@ -15,6 +15,8 @@ from nanotorch.autograd.ops_spec import gen_random_input_for
 
 N_CALLS = 20
 
+RTX_5080_FP32_PEAK = 56e12  # TFLOPS
+
 CUDA_AVAILABLE = nt.cuda.is_available()
 
 
@@ -125,7 +127,7 @@ def main():
                 op_name=op_name, cpu_flops=cpu_flops, cuda_flops=cuda_flops
             )
         )
-    hdr = f"{'op':<12} {'cpu (FLOPS)':>12} {'cuda (FLOPS)':>12} {'speedup':>12}"
+    hdr = f"{'op':<12} {'cpu (FLOPS)':>12} {'cuda (FLOPS)':>12} {'speedup':>12} {'%peak':>12}"
     print(hdr)
     print("-" * len(hdr))
     for r in results:
@@ -133,7 +135,8 @@ def main():
         print(
             f"{r.op_name:<12} {fmt_flops(r.cpu_flops):>12} "
             f"{fmt_flops(r.cuda_flops):>12} "
-            f"{sp:>10.1f}x"
+            f"{sp:>11.1f}x"
+            f"{r.cuda_flops / RTX_5080_FP32_PEAK * 100:>12.2f}%"
         )
 
 
