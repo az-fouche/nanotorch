@@ -2,7 +2,7 @@
 
 #include "helpers.h"
 #include "storage.h"
-#include "tensor_view.h"
+#include "tensor_view.cuh"
 
 std::shared_ptr<Storage> add(const TensorView &a, const TensorView &b);
 std::shared_ptr<Storage> subtract(const TensorView &a, const TensorView &b);

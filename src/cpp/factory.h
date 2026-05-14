@@ -5,8 +5,7 @@
 #include "helpers.h"
 #include "random.h"
 #include "storage.h"
-#include "tensor_view.h"
-
+#include "tensor_view.cuh"
 
 namespace py = pybind11;
 

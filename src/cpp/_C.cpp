@@ -7,8 +7,7 @@
 #include "ops/reduction_ops.h"
 #include "ops/unary_ops.h"
 #include "storage.h"
-#include "tensor_view.h"
-
+#include "tensor_view.cuh"
 
 PYBIND11_MODULE(_C, m) {
   m.doc() = "nanotorch C++ core module.";

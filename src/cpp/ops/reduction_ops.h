@@ -4,7 +4,7 @@
 
 #include "helpers.h"
 #include "storage.h"
-#include "tensor_view.h"
+#include "tensor_view.cuh"
 
 namespace nt {
 std::shared_ptr<Storage> sum(const TensorView &x,

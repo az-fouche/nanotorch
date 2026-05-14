@@ -2,7 +2,7 @@
 
 #include "helpers.h"
 #include "storage.h"
-#include "tensor_view.h"
+#include "tensor_view.cuh"
 
 std::shared_ptr<Storage> exp(const TensorView &x);
 std::shared_ptr<Storage> log(const TensorView &x);

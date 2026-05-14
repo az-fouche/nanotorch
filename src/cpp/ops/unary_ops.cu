@@ -3,50 +3,38 @@
 
 // Unary ops
 
-template <class T, class Op>
-std::shared_ptr<Storage> _cpu_unary_op_generic(const TensorView &x, Op op) {
+template <class T, class Op, class Idx>
+std::shared_ptr<Storage> _cpu_unary_op_generic(const TensorView &x, Op op,
+                                               Idx indexer) {
   auto numel = numel_from_shape(x.shape);
   auto storage_out =
       Storage::allocate(numel, x.storage->dtype(), x.storage->device());
   auto *ptr_in = static_cast<const T *>(x.storage->data());
   auto *ptr_out = static_cast<T *>(storage_out->data());
   for (py::ssize_t i = 0; i < numel; ++i)
-    ptr_out[i] = op(ptr_in[unravel(i, x)]);
+    ptr_out[i] = op(ptr_in[indexer(i)]);
   return storage_out;
 }
 
-template <class T, class Op>
+template <class T, class Op, class Idx>
 __global__ void _unary_kernel(const T *in, T *out, py::ssize_t n, Op op,
-                              TensorViewStatic view) {
+                              Idx indexer) {
   auto i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n)
     return;
-  auto idx = unravel(i, view);
-  out[i] = op(in[idx]);
+  out[i] = op(in[indexer(i)]);
 }
 
-template <class T, class Op>
-std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView &x, Op op) {
+template <class T, class Op, class Idx>
+std::shared_ptr<Storage> _cuda_unary_op_generic(const TensorView &x, Op op,
+                                                Idx indexer) {
   auto n = numel_from_shape(x.shape);
   auto storage_out = Storage::allocate(n, x.storage->dtype(), Device::Cuda);
-  launch_1d(n, _unary_kernel<T, Op>, static_cast<const T *>(x.storage->data()),
-            static_cast<T *>(storage_out->data()), n, op,
-            tensor_view_to_static(x));
-  return storage_out;
-}
+  launch_1d(n, _unary_kernel<T, Op, Idx>,
+            static_cast<const T *>(x.storage->data()),
+            static_cast<T *>(storage_out->data()), n, op, indexer);
 
-template <class Dispatch, class Op>
-std::shared_ptr<Storage> _dispatch_unary(const TensorView &x, Op op) {
-  return Dispatch::run(x.storage->dtype(), [&]<class T>() {
-    switch (x.storage->device()) {
-    case Device::Cpu:
-      return _cpu_unary_op_generic<T>(x, op);
-    case Device::Cuda:
-      return _cuda_unary_op_generic<T>(x, op);
-    default:
-      NT_UNREACHABLE();
-    }
-  });
+  return storage_out;
 }
 
 template <class T> __host__ __device__ T int_pow(T a, T n) {
@@ -70,15 +58,33 @@ template <class T> struct PowOp {
 };
 std::shared_ptr<Storage> pow(const TensorView &x, Scalar value) {
   return DispatchArithmetic::run(x.storage->dtype(), [&]<class T>() {
-    auto op = PowOp<T>{value.item<T>()};
-    switch (x.storage->device()) {
-    case Device::Cpu:
-      return _cpu_unary_op_generic<T>(x, op);
-    case Device::Cuda:
-      return _cuda_unary_op_generic<T>(x, op);
-    default:
-      NT_UNREACHABLE();
-    }
+    return with_indexer(x, [&](auto indexer) {
+      auto op = PowOp<T>{value.item<T>()};
+      switch (x.storage->device()) {
+      case Device::Cpu:
+        return _cpu_unary_op_generic<T>(x, op, indexer);
+      case Device::Cuda:
+        return _cuda_unary_op_generic<T>(x, op, indexer);
+      default:
+        NT_UNREACHABLE();
+      }
+    });
+  });
+}
+
+template <class Dispatch, class Op>
+std::shared_ptr<Storage> _dispatch_unary(const TensorView &x, Op op) {
+  return Dispatch::run(x.storage->dtype(), [&]<class T>() {
+    return with_indexer(x, [&](auto indexer) {
+      switch (x.storage->device()) {
+      case Device::Cpu:
+        return _cpu_unary_op_generic<T>(x, op, indexer);
+      case Device::Cuda:
+        return _cuda_unary_op_generic<T>(x, op, indexer);
+      default:
+        NT_UNREACHABLE();
+      }
+    });
   });
 }
 

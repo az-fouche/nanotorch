@@ -34,7 +34,7 @@ Two layers, glued by pybind11:
 
 **C++ core (`src/cpp/`)** — exposes the `nanotorch._C` extension module:
 - `Storage` (`storage.h/.cpp`): owns a contiguous, dtype-tagged byte buffer. The only owner of memory.
-- `TensorView` (`tensor_view.h`): non-owning view = `(shared_ptr<Storage>, shape, strides, offset)`. All ops consume `TensorView` and produce a fresh `Storage`. Views are how reshape/transpose/slicing stay zero-copy.
+- `TensorView` (`tensor_view.cuh`): non-owning view = `(shared_ptr<Storage>, shape, strides, offset)`. All ops consume `TensorView` and produce a fresh `Storage`. Views are how reshape/transpose/slicing stay zero-copy.
 - `Scalar` (`storage.h`): variant<bool, int64, double> with a custom pybind11 `type_caster` so Python scalars land as `Scalar` automatically.
 - `Dtype` enum + `dispatch_dtype<F>(dtype, func)`: the standard pattern for templated kernels — `ops.cpp` uses it heavily to instantiate per-dtype code paths.
 - `_C.cpp` is just the pybind11 module entry — it calls `bind_storage_`, `bind_tensor_view_`, `bind_ops_`.

@@ -3,45 +3,42 @@
 
 // Pointwise binary
 
-template <class T, class O, class F>
-std::shared_ptr<Storage> _cpu_binary_op_generic(const TensorView &x1,
-                                                const TensorView &x2, F &&func,
-                                                Dtype out_dtype) {
+template <class T, class O, class F, class Idx1, class Idx2>
+std::shared_ptr<Storage>
+_cpu_binary_op_generic(const TensorView &x1, const TensorView &x2, F &&func,
+                       Dtype out_dtype, Idx1 indexer_1, Idx2 indexer_2) {
   auto numel = numel_from_shape(x1.shape);
   auto *ptr_in1 = static_cast<const T *>(x1.storage->data());
   auto *ptr_in2 = static_cast<const T *>(x2.storage->data());
   auto storage_out = Storage::allocate(numel, out_dtype, x1.storage->device());
   auto *ptr_out = static_cast<O *>(storage_out->data());
   for (py::ssize_t i = 0; i < numel; ++i) {
-    auto idx1 = unravel(i, x1);
-    auto idx2 = unravel(i, x2);
-    ptr_out[i] = static_cast<O>(func(ptr_in1[idx1], ptr_in2[idx2]));
+    ptr_out[i] =
+        static_cast<O>(func(ptr_in1[indexer_1(i)], ptr_in2[indexer_2(i)]));
   }
   return storage_out;
 }
 
-template <class T, class O, class Op>
+template <class T, class O, class Op, class Idx1, class Idx2>
 __global__ void _binary_kernel(const T *ptr_in1, const T *ptr_in2,
-                               TensorViewStatic view_1, TensorViewStatic view_2,
-                               O *ptr_out, py::ssize_t n, Op op) {
+                               Idx1 indexer_1, Idx2 indexer_2, O *ptr_out,
+                               py::ssize_t n, Op op) {
   auto i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= n)
     return;
-  auto idx_a = unravel(i, view_1);
-  auto idx_b = unravel(i, view_2);
-  ptr_out[i] = static_cast<O>(op(ptr_in1[idx_a], ptr_in2[idx_b]));
+  ptr_out[i] = static_cast<O>(op(ptr_in1[indexer_1(i)], ptr_in2[indexer_2(i)]));
 }
 
-template <class T, class O, class Op>
-std::shared_ptr<Storage> _cuda_binary_op_generic(const TensorView &x1,
-                                                 const TensorView &x2, Op op,
-                                                 Dtype out_dtype) {
+template <class T, class O, class Op, class Idx1, class Idx2>
+std::shared_ptr<Storage>
+_cuda_binary_op_generic(const TensorView &x1, const TensorView &x2, Op op,
+                        Dtype out_dtype, Idx1 indexer_1, Idx2 indexer_2) {
   auto n = numel_from_shape(x1.shape);
   auto storage_out = Storage::allocate(n, out_dtype, Device::Cuda);
-  launch_1d(
-      n, _binary_kernel<T, O, Op>, static_cast<const T *>(x1.storage->data()),
-      static_cast<const T *>(x2.storage->data()), tensor_view_to_static(x1),
-      tensor_view_to_static(x2), static_cast<O *>(storage_out->data()), n, op);
+  launch_1d(n, _binary_kernel<T, O, Op, Idx1, Idx2>,
+            static_cast<const T *>(x1.storage->data()),
+            static_cast<const T *>(x2.storage->data()), indexer_1, indexer_2,
+            static_cast<O *>(storage_out->data()), n, op);
   return storage_out;
 }
 
@@ -56,14 +53,20 @@ _dispatch_binary(const TensorView &x1, const TensorView &x2, Op op,
   auto eff_dtype = out_dtype.value_or(x1.storage->dtype());
   return Dispatch::run(eff_dtype, [&]<class O>() {
     return Dispatch::run(x1.storage->dtype(), [&]<class T>() {
-      switch (x1.storage->device()) {
-      case Device::Cpu:
-        return _cpu_binary_op_generic<T, O>(x1, x2, op, eff_dtype);
-      case Device::Cuda:
-        return _cuda_binary_op_generic<T, O>(x1, x2, op, eff_dtype);
-      default:
-        NT_UNREACHABLE();
-      }
+      return with_indexer(x1, [&](auto indexer_1) {
+        return with_indexer(x2, [&](auto indexer_2) {
+          switch (x1.storage->device()) {
+          case Device::Cpu:
+            return _cpu_binary_op_generic<T, O>(x1, x2, op, eff_dtype,
+                                                indexer_1, indexer_2);
+          case Device::Cuda:
+            return _cuda_binary_op_generic<T, O>(x1, x2, op, eff_dtype,
+                                                 indexer_1, indexer_2);
+          default:
+            NT_UNREACHABLE();
+          }
+        });
+      });
     });
   });
 }

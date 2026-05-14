@@ -27,7 +27,7 @@ class ProfilingResults:
     cuda_flops: float
 
 
-def profile_op_cpu(op: type[ag.Function]) -> float:
+def profile_op_cpu(op: type[ag.Function]) -> float | None:
     """Profile the wall time of a single op."""
     nt.manual_seed(42)
     random.seed(42)
@@ -37,14 +37,14 @@ def profile_op_cpu(op: type[ag.Function]) -> float:
     total_t = 0
     flops = op.flops(*inputs)
     if flops == 0:
-        return 0.0
+        return None
     for i in range(N_CALLS):
-        t0 = time.time()
+        t0 = time.perf_counter()
         op.apply(*inputs)
-        if i == 0:  # Skip warmup
+        if i < 2:  # Skip warmup
             continue
-        total_t += time.time() - t0
-    return flops / total_t
+        total_t += time.perf_counter() - t0
+    return flops * (N_CALLS - 2) / total_t
 
 
 def profile_op_cuda(op: type[ag.Function]) -> float:
@@ -54,7 +54,7 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
     inputs = [
         x.to("cuda") if isinstance(x, Tensor) else x
         for x in gen_random_input_for(
-            op.op_spec, min_ndim=2, max_ndim=2, min_size=4000, max_size=4000
+            op.op_spec, min_ndim=2, max_ndim=2, min_size=6000, max_size=6000
         )
     ]
     flops = op.flops(*inputs)
@@ -63,13 +63,13 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
     total_t = 0
     for i in range(N_CALLS):
         nt.cuda.sync()
-        t0 = time.time()
+        t0 = time.perf_counter()
         op.apply(*inputs)
-        if i == 0:  # Skip warmup
+        if i < 2:  # Skip warmup
             continue
         nt.cuda.sync()
-        total_t += time.time() - t0
-    return flops / total_t
+        total_t += time.perf_counter() - t0
+    return flops * (N_CALLS - 2) / total_t
 
 
 def should_run(op_name: str, filter: str | None, regex: bool):
@@ -113,6 +113,8 @@ def main():
         with nt.no_grad():
             pbar.set_description(f"Profiling {op_name} (cpu)")
             cpu_flops = profile_op_cpu(op)
+            if cpu_flops is None:  # Virtual ops like reshape
+                continue
             if CUDA_AVAILABLE:
                 pbar.set_description(f"Profiling {op_name} (cuda)")
                 cuda_flops = profile_op_cuda(op)

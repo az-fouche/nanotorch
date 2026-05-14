@@ -6,7 +6,7 @@
 
 #include <pybind11/pybind11.h>
 
-#include "tensor_view.h"
+#include "tensor_view.cuh"
 
 namespace py = pybind11;
 
