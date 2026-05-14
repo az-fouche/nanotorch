@@ -3,10 +3,15 @@
 
 namespace nt {
 
-constexpr int TILE_M = 64;
-constexpr int TILE_N = 64;
-constexpr int TILE_K = 8;
-constexpr int ELEMS_PER_THREAD = 8;
+constexpr int BLOCK_M = 128;
+constexpr int BLOCK_N = 128;
+constexpr int BLOCK_K = 8;
+constexpr int THREAD_M = 8;
+constexpr int THREAD_N = 8;
+constexpr int NUM_THREADS = BLOCK_M * BLOCK_N / (THREAD_M * THREAD_N);
+constexpr int THREADS_PER_ROW = BLOCK_N / THREAD_N;
+constexpr int STRIDE_A = NUM_THREADS / BLOCK_K;
+constexpr int STRIDE_B = NUM_THREADS / BLOCK_N;
 
 template <class T>
 std::shared_ptr<Storage>
@@ -88,50 +93,73 @@ _matmul_fallback(const T *A, const T *B, T *C, TensorViewStatic view_1,
 template <class T>
 __global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
                                py::ssize_t M, py::ssize_t N) {
-  auto block_idx_i = blockIdx.x * TILE_M;
-  auto block_idx_j = blockIdx.y * TILE_N;
-  auto thread_i = threadIdx.x / TILE_N;
-  auto thread_j = threadIdx.x % TILE_N;
+  auto block_i = blockIdx.x * BLOCK_M; // Global coordinates in A/B/C
+  auto block_j = blockIdx.y * BLOCK_N;
+  auto thread_i = threadIdx.x / THREADS_PER_ROW; // Local coordinates in block
+  auto thread_j = threadIdx.x % THREADS_PER_ROW;
   auto batch = blockIdx.z;
 
-  A += batch * M * K + block_idx_i * K;
-  B += batch * K * N + block_idx_j;
-  C += batch * M * N + block_idx_i * N + block_idx_j;
+  // Offset pointers to the start of the accumulation
+  A += batch * M * K + block_i * K;
+  B += batch * K * N + block_j;
 
-  __shared__ T As[TILE_M * TILE_K], Bs[TILE_K * TILE_N];
-  auto as_i = threadIdx.x / TILE_K; // Local coordinates in As/Bs
-  auto as_j = threadIdx.x % TILE_K;
-  auto bs_i = threadIdx.x / TILE_N;
-  auto bs_j = threadIdx.x % TILE_N;
-  auto a_i = block_idx_i + as_i; // Global coordinates in A/B
-  auto b_j = block_idx_j + bs_j;
+  // Set up shared storage
+  __shared__ T As[BLOCK_M * BLOCK_K], Bs[BLOCK_K * BLOCK_N];
+  auto as_i = threadIdx.x / BLOCK_K; // Fixed storage step coordinates
+  auto as_j = threadIdx.x % BLOCK_K;
+  auto bs_i = threadIdx.x / BLOCK_N; // Fixed storage step coordinates
+  auto bs_j = threadIdx.x % BLOCK_N;
 
-  T thread_acc[ELEMS_PER_THREAD] = {};
-  for (int block_start = 0; block_start < K; block_start += TILE_K) {
-    // Fill [TILE_SIZE, TILE_SIZE] block buffers
-    auto a_j = block_start + as_j;
-    auto b_i = block_start + bs_i;
-    As[as_i * TILE_K + as_j] = (a_i < M && a_j < K) ? A[as_i * K + as_j] : T(0);
-    Bs[bs_i * TILE_N + bs_j] = (b_i < K && b_j < N) ? B[bs_i * N + bs_j] : T(0);
+  // Fixed A row/B col offset of the thread
+  auto a_i = block_i + as_i;
+  auto b_j = block_j + bs_j;
+
+  // Per-block 2D accumulation
+  T thread_acc[THREAD_M * THREAD_N] = {};
+  T scratch_a[THREAD_M] = {}, scratch_b[THREAD_N] = {};
+  for (int block_start = 0; block_start < K; block_start += BLOCK_K) {
+    // Storage step: fill [TILE_SIZE, TILE_SIZE] block buffers
+    for (int offset = 0; offset < BLOCK_M; offset += STRIDE_A) {
+      auto as_ioff = as_i + offset;
+      As[as_ioff * BLOCK_K + as_j] =
+          (a_i + offset < M && block_start + as_j < K) ? A[as_ioff * K + as_j]
+                                                       : T(0);
+    }
+    for (int offset = 0; offset < BLOCK_K; offset += STRIDE_B) {
+      auto bs_ioff = bs_i + offset;
+      Bs[bs_ioff * BLOCK_N + bs_j] =
+          (block_start + bs_ioff < K && b_j < N) ? B[bs_ioff * N + bs_j] : T(0);
+    }
     __syncthreads();
 
     // Accumulate partial dot product on cached block
-    for (int k = 0; k < TILE_K; ++k) {
-      T bkj = Bs[k * TILE_N + bs_j];
-      for (int p = 0; p < ELEMS_PER_THREAD; ++p)
-        thread_acc[p] +=
-            As[(thread_i * ELEMS_PER_THREAD + p) * TILE_K + k] * bkj;
+    for (int k = 0; k < BLOCK_K; ++k) {
+      for (int i = 0; i < THREAD_M; ++i)
+        scratch_a[i] = As[(thread_i * THREAD_M + i) * BLOCK_K + k];
+      for (int i = 0; i < THREAD_N; ++i)
+        scratch_b[i] = Bs[k * BLOCK_N + thread_j * THREAD_N + i];
+
+      for (int pm = 0; pm < THREAD_M; ++pm)
+        for (int pn = 0; pn < THREAD_N; ++pn)
+          thread_acc[pm * THREAD_N + pn] += scratch_a[pm] * scratch_b[pn];
     }
 
-    // Move to next block
-    A += TILE_K;
-    B += TILE_K * N;
+    // Rebase pointers to next block
+    A += BLOCK_K;
+    B += BLOCK_K * N;
     __syncthreads();
   }
-  for (int p = 0; p < ELEMS_PER_THREAD; ++p) {
-    if (block_idx_i + thread_i * ELEMS_PER_THREAD + p < M &&
-        block_idx_j + thread_j < N)
-      C[(thread_i * ELEMS_PER_THREAD + p) * N + thread_j] = thread_acc[p];
+
+  // Write the result
+  C += batch * M * N;
+  auto row = block_i + thread_i * THREAD_M, col = block_j + thread_j * THREAD_N;
+  for (int pm = 0; pm < THREAD_M; ++pm) {
+    if (row + pm >= M)
+      continue;
+    for (int pn = 0; pn < THREAD_N; ++pn) {
+      if (col + pn < N)
+        C[(row + pm) * N + col + pn] = thread_acc[pm * THREAD_N + pn];
+    }
   }
 }
 
@@ -147,14 +175,13 @@ _cuda_matmul(const TensorView &x1, const TensorView &x2, py::ssize_t ndim,
   auto *B = static_cast<const T *>(x2.storage->data()) + x2.offset;
   auto C = static_cast<T *>(new_storage->data());
   if (is_contiguous(x1) && is_contiguous(x2)) {
-    auto n_partial_x = (M + TILE_M - 1) / TILE_M;
-    auto n_partial_y = (N + TILE_N - 1) / TILE_N;
+    auto n_partial_x = (M + BLOCK_M - 1) / BLOCK_M;
+    auto n_partial_y = (N + BLOCK_N - 1) / BLOCK_N;
     py::ssize_t batch = 1;
     for (py::ssize_t i = static_cast<py::ssize_t>(x1.shape.size() - 3); i >= 0;
          --i)
       batch *= x1.shape[i];
-    dim3 grid(n_partial_x, n_partial_y, batch),
-        block(TILE_M * TILE_N / ELEMS_PER_THREAD);
+    dim3 grid(n_partial_x, n_partial_y, batch), block(NUM_THREADS);
     _matmul_contig<<<grid, block>>>(A, B, C, K, M, N);
     NT_CUDA_CHECK(cudaGetLastError());
   } else {
