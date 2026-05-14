@@ -13,7 +13,7 @@ from nanotorch import Tensor
 from nanotorch import autograd as ag
 from nanotorch.autograd.ops_spec import gen_random_input_for
 
-N_CALLS = 20
+N_CALLS = 100
 
 RTX_5080_FP32_PEAK = 56e12  # TFLOPS
 

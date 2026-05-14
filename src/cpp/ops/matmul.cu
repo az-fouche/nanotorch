@@ -3,15 +3,20 @@
 
 namespace nt {
 
+// Primitives
 constexpr int BLOCK_M = 128;
 constexpr int BLOCK_N = 128;
-constexpr int BLOCK_K = 8;
+constexpr int BLOCK_K = 16;
 constexpr int THREAD_M = 8;
 constexpr int THREAD_N = 8;
+
+// Derivatives
+constexpr int BLOCK_N4 = BLOCK_N / 4;
+constexpr int BLOCK_K4 = BLOCK_K / 4;
 constexpr int NUM_THREADS = BLOCK_M * BLOCK_N / (THREAD_M * THREAD_N);
 constexpr int THREADS_PER_ROW = BLOCK_N / THREAD_N;
-constexpr int STRIDE_A = NUM_THREADS / BLOCK_K;
-constexpr int STRIDE_B = NUM_THREADS / BLOCK_N;
+constexpr int STRIDE_A = 4 * NUM_THREADS / BLOCK_K; // Float4 trick
+constexpr int STRIDE_B = 4 * NUM_THREADS / BLOCK_N;
 
 template <class T>
 std::shared_ptr<Storage>
@@ -88,11 +93,15 @@ _matmul_fallback(const T *A, const T *B, T *C, TensorViewStatic view_1,
   C[i] = acc;
 }
 
-// Nice tensor layout (most cases)
+// Fast path: FP32 + contiguous tensor layout (most cases)
 // Ref: https://siboehm.com/articles/22/CUDA-MMM
-template <class T>
-__global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
-                               py::ssize_t M, py::ssize_t N) {
+__global__ void _matmul_contig_fp32(const float *A, const float *B, float *C,
+                                    py::ssize_t K, py::ssize_t M,
+                                    py::ssize_t N) {
+  static_assert(BLOCK_M % 4 == 0);
+  static_assert(BLOCK_N % 4 == 0);
+  static_assert(BLOCK_K % 4 == 0);
+
   auto block_i = blockIdx.x * BLOCK_M; // Global coordinates in A/B/C
   auto block_j = blockIdx.y * BLOCK_N;
   auto thread_i = threadIdx.x / THREADS_PER_ROW; // Local coordinates in block
@@ -104,31 +113,63 @@ __global__ void _matmul_contig(const T *A, const T *B, T *C, py::ssize_t K,
   B += batch * K * N + block_j;
 
   // Set up shared storage
-  __shared__ T As[BLOCK_M * BLOCK_K], Bs[BLOCK_K * BLOCK_N];
-  auto as_i = threadIdx.x / BLOCK_K; // Fixed storage step coordinates
-  auto as_j = threadIdx.x % BLOCK_K;
-  auto bs_i = threadIdx.x / BLOCK_N; // Fixed storage step coordinates
-  auto bs_j = threadIdx.x % BLOCK_N;
-
-  // Fixed A row/B col offset of the thread
+  __shared__ float As[BLOCK_M * BLOCK_K], Bs[BLOCK_K * BLOCK_N];
+  auto as_i = threadIdx.x / BLOCK_K4; // Fixed storage step coordinates
+  auto as_j = threadIdx.x % BLOCK_K4;
+  auto bs_i = threadIdx.x / BLOCK_N4; // Fixed storage step coordinates
+  auto bs_j = threadIdx.x % BLOCK_N4;
   auto a_i = block_i + as_i;
-  auto b_j = block_j + bs_j;
+  auto b_col = block_j + bs_j * 4;
 
   // Per-block 2D accumulation
-  T thread_acc[THREAD_M * THREAD_N] = {};
-  T scratch_a[THREAD_M] = {}, scratch_b[THREAD_N] = {};
+  float thread_acc[THREAD_M * THREAD_N] = {};
+  float scratch_a[THREAD_M] = {}, scratch_b[THREAD_N] = {};
   for (int block_start = 0; block_start < K; block_start += BLOCK_K) {
-    // Storage step: fill [TILE_SIZE, TILE_SIZE] block buffers
+    auto a_col = block_start + as_j * 4;
+
+    // Fill As buffer (transposed for coalescence)
     for (int offset = 0; offset < BLOCK_M; offset += STRIDE_A) {
+      auto a_row = a_i + offset;
       auto as_ioff = as_i + offset;
-      As[as_j * BLOCK_M + as_ioff] =
-          (a_i + offset < M && block_start + as_j < K) ? A[as_ioff * K + as_j]
-                                                       : T(0);
+      float4 values;
+      if (a_row < M && a_col + 3 < K)
+        values =
+            reinterpret_cast<const float4 *>(&A[as_ioff * K + as_j * 4])[0];
+      else {
+        values.x =
+            (a_row < M && a_col + 0 < K) ? A[as_ioff * K + as_j * 4 + 0] : 0;
+        values.y =
+            (a_row < M && a_col + 1 < K) ? A[as_ioff * K + as_j * 4 + 1] : 0;
+        values.z =
+            (a_row < M && a_col + 2 < K) ? A[as_ioff * K + as_j * 4 + 2] : 0;
+        values.w =
+            (a_row < M && a_col + 3 < K) ? A[as_ioff * K + as_j * 4 + 3] : 0;
+      }
+      As[(as_j * 4 + 0) * BLOCK_M + as_ioff] = values.x; // As is transposed
+      As[(as_j * 4 + 1) * BLOCK_M + as_ioff] = values.y;
+      As[(as_j * 4 + 2) * BLOCK_M + as_ioff] = values.z;
+      As[(as_j * 4 + 3) * BLOCK_M + as_ioff] = values.w;
     }
+
+    // Fill Bs buffer (non-transposed for coalescence)
     for (int offset = 0; offset < BLOCK_K; offset += STRIDE_B) {
       auto bs_ioff = bs_i + offset;
-      Bs[bs_ioff * BLOCK_N + bs_j] =
-          (block_start + bs_ioff < K && b_j < N) ? B[bs_ioff * N + bs_j] : T(0);
+      auto b_row = block_start + bs_ioff;
+      float4 values;
+      if (b_row < K && b_col + 3 < N)
+        values =
+            reinterpret_cast<const float4 *>(&B[bs_ioff * N + bs_j * 4])[0];
+      else {
+        values.x =
+            (b_row < K && b_col + 0 < N) ? B[bs_ioff * N + bs_j * 4 + 0] : 0;
+        values.y =
+            (b_row < K && b_col + 1 < N) ? B[bs_ioff * N + bs_j * 4 + 1] : 0;
+        values.z =
+            (b_row < K && b_col + 2 < N) ? B[bs_ioff * N + bs_j * 4 + 2] : 0;
+        values.w =
+            (b_row < K && b_col + 3 < N) ? B[bs_ioff * N + bs_j * 4 + 3] : 0;
+      }
+      reinterpret_cast<float4 *>(&Bs[bs_ioff * BLOCK_N + bs_j * 4])[0] = values;
     }
     __syncthreads();
 
@@ -169,26 +210,28 @@ _cuda_matmul(const TensorView &x1, const TensorView &x2, py::ssize_t ndim,
              const std::vector<py::ssize_t> &out_shape, py::ssize_t K,
              py::ssize_t M, py::ssize_t N) {
   auto numel = numel_from_shape(out_shape);
-  auto new_storage =
-      Storage::allocate(numel, x1.storage->dtype(), Device::Cuda);
+  Dtype dtype = x1.storage->dtype();
+  auto new_storage = Storage::allocate(numel, dtype, Device::Cuda);
   auto *A = static_cast<const T *>(x1.storage->data()) + x1.offset;
   auto *B = static_cast<const T *>(x2.storage->data()) + x2.offset;
   auto C = static_cast<T *>(new_storage->data());
-  if (is_contiguous(x1) && is_contiguous(x2)) {
-    auto n_partial_x = (M + BLOCK_M - 1) / BLOCK_M;
-    auto n_partial_y = (N + BLOCK_N - 1) / BLOCK_N;
-    py::ssize_t batch = 1;
-    for (py::ssize_t i = static_cast<py::ssize_t>(x1.shape.size() - 3); i >= 0;
-         --i)
-      batch *= x1.shape[i];
-    dim3 grid(n_partial_x, n_partial_y, batch), block(NUM_THREADS);
-    _matmul_contig<<<grid, block>>>(A, B, C, K, M, N);
-    NT_CUDA_CHECK(cudaGetLastError());
-  } else {
-    launch_1d(numel, _matmul_fallback<T>, A, B, C, tensor_view_to_static(x1),
-              tensor_view_to_static(x2), numel, ndim, K, M, N);
+  if constexpr (std::is_same_v<T, float>) {
+    if (is_contiguous(x1) && is_contiguous(x2) && K % 4 == 0 && N % 4 == 0) {
+      auto n_partial_x = (M + BLOCK_M - 1) / BLOCK_M;
+      auto n_partial_y = (N + BLOCK_N - 1) / BLOCK_N;
+      py::ssize_t batch = 1;
+      for (py::ssize_t i = static_cast<py::ssize_t>(x1.shape.size() - 3);
+           i >= 0; --i)
+        batch *= x1.shape[i];
+      dim3 grid(n_partial_x, n_partial_y, batch), block(NUM_THREADS);
+      _matmul_contig_fp32<<<grid, block>>>(A, B, C, K, M, N);
+      NT_CUDA_CHECK(cudaGetLastError());
+      return new_storage;
+    }
   }
-
+  // Fallback
+  launch_1d(numel, _matmul_fallback<T>, A, B, C, tensor_view_to_static(x1),
+            tensor_view_to_static(x2), numel, ndim, K, M, N);
   return new_storage;
 }
 
