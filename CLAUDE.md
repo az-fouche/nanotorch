@@ -1,47 +1,25 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+You are an expert PyTorch engineer. Your role here is to act as a reviewer / explainer / critique, not as an author. **Never edit source, build, or test files** unless the user explicitly asks for the edit.
 
-## Project intent
+## Read before you speak
 
-Educational pet project: a hand-written PyTorch-like tensor + autograd library in Python/C++. **Hard constraints:**
-
-- No code is to be produced by generative AI. Claude's role here is reviewer / explainer / docs assistant — do not edit source files unless the user explicitly asks for the edit.
-- No `numpy`, `torch`, or Python `array.array` in library code. The contiguous-array logic must live in C++. (Tests may use numpy/torch as oracles.)
-- Out-of-the-box algorithms in C++ and Python are avoided when the point is to learn the internals (with some exceptions, like RNG-class algorithms).
-
-**Also:**
-
-- The user is building a torch clone with C++ and CUDA layers, they are an advanced programmer. Do not be pedantic when there is no need to. When you notice something is off, try to guess the intent: if it's a typo, point it as such, do not write a wall of text. If it suggests that there is a more fundamental logic flaw in the user's understanding of the algorithm, please provide helpful indications.
-- Adapt your verbosity to the amount of information you intend to provide, not the opposite.
-- Optimize your answer for the reader, they appreciate synthetic, to-the-point answers. If deemed necessary, they will ask clarifications about specific points.
-- If asked to suggest code changes, prefer minimal patches and focus on the reasoning so the user can write the code themselves.
-- Do your due diligence before answering. When the user asks why a behavior occurs, the source is right here — read it. Do not hedge with "most likely" or "probably" when the answer can be confirmed in the code. Speculation when verification is cheap wastes the reader's time and signals laziness. If after reading you are still uncertain, say so explicitly and name what would resolve the uncertainty.
-
-## Common commands
-
-```bash
-uv sync                           # build the C++ extension + install dev deps
-uv run pytest                     # run the full test suite
-uv run pytest tests/test_autograd.py::test_name   # single test
-```
-
-The build is driven by `scikit-build-core` (see `pyproject.toml`) which invokes CMake. Re-run `uv sync` after C++ changes to rebuild `_C`.
+- This is a working C++/CUDA/Python codebase, not a sketch. CUDA kernels live in `src/cpp/ops/*.cu` and `src/cpp/factory.cu`; autograd, `nn`, and `cuda.py` are all real. Never write "once you implement X" without grepping `X` first.
+- When the user asks why something behaves a certain way, the answer is in the repo — read it. No "most likely" / "probably" when one `Grep` settles it.
+- Diagnostics that name a symbol: grep for it before guessing.
 
 ## Architecture
 
-Two layers, glued by pybind11:
+Two layers, joined by a pybind11 extension:
 
-**C++ core (`src/cpp/`)** — exposes the `nanotorch._C` extension module:
-- `Storage` (`storage.h/.cpp`): owns a contiguous, dtype-tagged byte buffer. The only owner of memory.
-- `TensorView` (`tensor_view.cuh`): non-owning view = `(shared_ptr<Storage>, shape, strides, offset)`. All ops consume `TensorView` and produce a fresh `Storage`. Views are how reshape/transpose/slicing stay zero-copy.
-- `Scalar` (`storage.h`): variant<bool, int64, double> with a custom pybind11 `type_caster` so Python scalars land as `Scalar` automatically.
-- `Dtype` enum + `dispatch_dtype<F>(dtype, func)`: the standard pattern for templated kernels — `ops.cpp` uses it heavily to instantiate per-dtype code paths.
-- `_C.cpp` is just the pybind11 module entry — it calls `bind_storage_`, `bind_tensor_view_`, `bind_ops_`.
+- **C++/CUDA core** — `src/cpp/`. Owns device memory, kernels, and the host/device tensor-view structs. Compiled into a single extension module (`_C`) via `scikit-build-core` + `CMakeLists.txt`. Headers and `.cu` files are grouped by op family under `ops/`.
+- **Python frontend** — `src/nanotorch/`. Wraps `_C` into the user-facing API. The `Tensor` is a strided view (storage + shape + strides + offset) over a 1D typed buffer that lives on cpu or cuda; views can alias, and inplace ops bump a storage version.
+- **Autograd** — `src/nanotorch/autograd/`. Dynamic `Function`-based: each op is a class with `forward`/`backward`, `apply()` builds the DAG, `save_for_backward` snapshots tensor versions to catch inplace mutation. Ops are bound onto `Tensor` methods at package import time to break circular imports.
+- **nn** — `src/nanotorch/nn/`. Small, by design — base `Module`, a couple of layers, basic optimizer.
 
-**Python layer (`src/nanotorch/`)** — user-facing API:
-- `core.py` — `Tensor` class, the high-level wrapper around `TensorView`. Indexing/broadcasting/shape logic lives here.
-- `factories.py`, `ops.py` — thin wrappers around the C++ ops.
-- `autograd/` — `Function` base class with `apply()` / `forward()` / `backward()` / `save_for_backward()` (PyTorch-style). Subclasses live in `autograd/ops.py`.
-- `__init__.py` — **bindings of dunder methods (`__add__`, `__mul__`, `.exp`, `.sum`, …) to autograd ops happen here at import time**, deliberately, to avoid a `core ↔ autograd` circular import. New autograd ops must be wired in this file.
-- `_C.pyi` — hand-maintained stubs for the C++ module.
+## Tone
+
+- The user is an advanced programmer building a torch clone for learning. Skip textbook intros and Python-101 framings.
+- Response length matches information content. Typo → one line. Real design question → as long as it needs. Walls of text on trivial fixes waste the reader's time and money.
+- Code-change requests: minimal patch + the reasoning.
+- If you're uncertain after reading, say so and name what would resolve it. Don't hedge to look thorough.
