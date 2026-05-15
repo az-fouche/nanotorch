@@ -20,6 +20,11 @@ RTX_5080_FP32_PEAK = 56e12  # TFLOPS
 
 CUDA_AVAILABLE = nt.cuda.is_available()
 
+CPU_SIZE = 1000
+CPU_SIZE_MATMUL = 500
+CUDA_SIZE = 16000
+CUDA_SIZE_MATMUL = 4000
+
 
 @dataclass(kw_only=True)
 class ProfilingResults:
@@ -34,11 +39,12 @@ def profile_op_cpu(op: type[ag.Function]) -> float | None:
     """Profile the flops of a single op on CPU."""
     nt.manual_seed(42)
     random.seed(42)
+    size = CPU_SIZE if op is not ag.MatmulOp else CPU_SIZE_MATMUL
     inputs = gen_random_input_for(
-        op.op_spec, min_ndim=2, max_ndim=2, min_size=500, max_size=500
+        op.op_spec, min_ndim=2, max_ndim=2, min_size=size, max_size=size
     )
     total_t = 0
-    flops = op.flops(*inputs)
+    flops = op.flops(*inputs)  # type: ignore
     if flops == 0:
         return None
     for i in range(N_CALLS):
@@ -54,13 +60,14 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
     """Profile the flops of a single op on CUDA."""
     nt.manual_seed(42)
     random.seed(42)
+    size = CUDA_SIZE if op is not ag.MatmulOp else CUDA_SIZE_MATMUL
     inputs = [
         x.to("cuda") if isinstance(x, Tensor) else x
         for x in gen_random_input_for(
-            op.op_spec, min_ndim=2, max_ndim=2, min_size=4000, max_size=4000
+            op.op_spec, min_ndim=2, max_ndim=2, min_size=size, max_size=size
         )
     ]
-    flops = op.flops(*inputs)
+    flops = op.flops(*inputs)  # type: ignore
     if flops == 0:
         return 0.0
     total_t = 0
