@@ -1,18 +1,11 @@
 [project]
 name = "nanotorch"
 version = "0.1.0"
-description = "Add your description here"
+description = "A minimal PyTorch clone."
 readme = "README.md"
-authors = [
-    { name = "Risitop", email = "aziz.fouche@gmail.com" }
-]
+authors = [{ name = "Aziz F.", email = "aziz.fouche@gmail.com" }]
 requires-python = ">=3.11"
-dependencies = [
-    "tqdm>=4.67.3",
-]
-
-[project.scripts]
-nanotorch = "nanotorch:main"
+dependencies = ["tqdm>=4.67.3"]
 
 [build-system]
 requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
@@ -30,3 +23,11 @@ dev = [
     "pybind11>=3.0.3",
     "ruff>=0.15.12",
 ]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }

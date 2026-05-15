@@ -39,23 +39,24 @@ For fun, I also added a comparison to the theoretical peak FLOPS on this device 
 ```
 op            cpu (FLOPS) cuda (FLOPS)      speedup        %peak
 ----------------------------------------------------------------
-addop             168.31M        1.28G         7.6x        0.00%
-expop             534.15M       11.04G        20.7x        0.02%
-logop             482.54M       11.03G        22.9x        0.02%
-matmulop            2.26G       17.96T      7956.7x       32.07%
-meanop            205.36M       25.94G       126.3x        0.05%
-mulop             199.55M        1.39G         7.0x        0.00%
-negop               7.04G       11.67G         1.7x        0.02%
-powop             196.17M       12.77G        65.1x        0.02%
-reluop              6.31G       12.87G         2.0x        0.02%
-sigmoidop          86.10M       12.56G       145.9x        0.02%
-sqrtop              4.67G       13.07G         2.8x        0.02%
-subop             202.94M        1.11G         5.4x        0.00%
-sumop             197.27M       48.07G       243.7x        0.09%
-tanhop            492.62M       12.90G        26.2x        0.02%
-truedivop         193.41M        1.41G         7.3x        0.00%
-minop             195.61M       44.03G       225.1x        0.08%
-maxop             199.54M       43.92G       220.1x        0.08%
+addop             204.28M        1.39G         6.8x        0.00%
+expop             559.28M       11.69G        20.9x        0.02%
+logop             496.38M       12.00G        24.2x        0.02%
+matmul-torch      911.90G       38.08T        41.8x       68.00%
+matmulop            2.51G       16.53T      6589.3x       29.51%
+maxop             208.99M       46.00G       220.1x        0.08%
+meanop            220.45M       34.56G       156.8x        0.06%
+minop             208.67M       48.10G       230.5x        0.09%
+mulop             213.13M        1.42G         6.6x        0.00%
+negop               8.34G       12.18G         1.5x        0.02%
+powop             215.21M       11.86G        55.1x        0.02%
+reluop              8.36G       12.19G         1.5x        0.02%
+sigmoidop          88.81M       11.08G       124.8x        0.02%
+sqrtop              3.70G       11.68G         3.2x        0.02%
+subop             212.63M        1.41G         6.6x        0.00%
+sumop             224.24M       47.72G       212.8x        0.09%
+tanhop            475.07M       13.74G        28.9x        0.02%
+truedivop         205.16M        1.41G         6.9x        0.00%
 ```
 
 ## Generative AI stance

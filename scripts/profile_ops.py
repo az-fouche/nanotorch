@@ -6,6 +6,7 @@ import re
 import time
 from dataclasses import dataclass
 
+import torch
 import tqdm
 
 import nanotorch as nt
@@ -30,7 +31,7 @@ class ProfilingResults:
 
 
 def profile_op_cpu(op: type[ag.Function]) -> float | None:
-    """Profile the wall time of a single op."""
+    """Profile the flops of a single op on CPU."""
     nt.manual_seed(42)
     random.seed(42)
     inputs = gen_random_input_for(
@@ -50,7 +51,7 @@ def profile_op_cpu(op: type[ag.Function]) -> float | None:
 
 
 def profile_op_cuda(op: type[ag.Function]) -> float:
-    """Profile the wall time of a single op."""
+    """Profile the flops of a single op on CUDA."""
     nt.manual_seed(42)
     random.seed(42)
     inputs = [
@@ -64,7 +65,6 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
         return 0.0
     total_t = 0
     for i in range(N_CALLS):
-        nt.cuda.sync()
         t0 = time.perf_counter()
         op.apply(*inputs)
         if i < 2:  # Skip warmup
@@ -72,6 +72,39 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
         nt.cuda.sync()
         total_t += time.perf_counter() - t0
     return flops * (N_CALLS - 2) / total_t
+
+
+def profile_torch_matmul() -> ProfilingResults:
+    """Profile the wall time of a single op."""
+    nt.manual_seed(42)
+    random.seed(42)
+    A_cpu, B_cpu, A_cuda, B_cuda = (
+        torch.rand(500, 500),
+        torch.rand(500, 500),
+        torch.rand(6000, 6000).to("cuda"),
+        torch.rand(6000, 6000).to("cuda"),
+    )
+    flops_cpu = ag.MatmulOp.flops(A_cpu, B_cpu)  # type: ignore
+    flops_cuda = ag.MatmulOp.flops(A_cuda, B_cuda)  # type: ignore
+
+    total_t_cpu, total_t_cuda = 0, 0
+    for i in range(N_CALLS):
+        t0 = time.perf_counter()
+        _ = A_cpu @ B_cpu
+        if i >= 2:
+            total_t_cpu += time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        _ = A_cuda @ B_cuda
+        torch.cuda.synchronize()
+        if i >= 2:
+            total_t_cuda += time.perf_counter() - t0
+
+    return ProfilingResults(
+        op_name="matmul-torch",
+        cpu_flops=flops_cpu * (N_CALLS - 2) / total_t_cpu,
+        cuda_flops=flops_cuda * (N_CALLS - 2) / total_t_cuda,
+    )
 
 
 def should_run(op_name: str, filter: str | None, regex: bool):
@@ -127,6 +160,10 @@ def main():
                 op_name=op_name, cpu_flops=cpu_flops, cuda_flops=cuda_flops
             )
         )
+    results.append(profile_torch_matmul())
+
+    results = sorted(results, key=lambda r: r.op_name)
+
     hdr = f"{'op':<12} {'cpu (FLOPS)':>12} {'cuda (FLOPS)':>12} {'speedup':>12} {'%peak':>12}"
     print(hdr)
     print("-" * len(hdr))
