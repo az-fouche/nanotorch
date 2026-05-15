@@ -2,10 +2,6 @@
 
 #include "cuda.cuh"
 
-std::shared_ptr<Storage> zeros(py::ssize_t n, Dtype dtype, Device device) {
-  return Storage::allocate(n, dtype, device); // 0 by default
-}
-
 template <class T>
 __global__ void _fill_kernel(py::ssize_t n, T value, T *ptr_out) {
   auto i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -17,9 +13,7 @@ __global__ void _fill_kernel(py::ssize_t n, T value, T *ptr_out) {
 template <class T>
 std::shared_ptr<Storage> _full(py::ssize_t n, T value, Dtype dtype,
                                Device device) {
-  auto storage_out = zeros(n, dtype, device);
-  if (value == T{})
-    return storage_out;
+  auto storage_out = Storage::allocate(n, dtype, device);
   auto ptr_out = static_cast<T *>(storage_out->data());
   switch (device) {
   case Device::Cpu:
@@ -33,6 +27,12 @@ std::shared_ptr<Storage> _full(py::ssize_t n, T value, Dtype dtype,
     NT_UNREACHABLE();
   }
   return storage_out;
+}
+
+std::shared_ptr<Storage> zeros(py::ssize_t n, Dtype dtype, Device device) {
+  return DispatchAll::run(dtype, [&]<class T>() {
+    return _full<T>(n, static_cast<T>(0), dtype, device);
+  });
 }
 
 std::shared_ptr<Storage> ones(py::ssize_t n, Dtype dtype, Device device) {
@@ -61,7 +61,7 @@ std::shared_ptr<Storage> eye(py::ssize_t n, Dtype dtype, Device device) {
 
 std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start,
                                 py::ssize_t step, Dtype dtype, Device device) {
-  auto storage = zeros(n, dtype, Device::Cpu);
+  auto storage = Storage::allocate(n, dtype, Device::Cpu);
   DispatchAll::run(dtype, [&]<class T>() {
     auto data = static_cast<T *>(storage->data());
     for (py::ssize_t i = 0; i < n; ++i)
@@ -71,7 +71,7 @@ std::shared_ptr<Storage> arange(py::ssize_t n, py::ssize_t start,
 }
 
 std::shared_ptr<Storage> uniform(py::ssize_t n, Dtype dtype, Device device) {
-  auto storage = zeros(n, dtype, Device::Cpu);
+  auto storage = Storage::allocate(n, dtype, Device::Cpu);
   DispatchFloat::run(dtype, [&]<class T>() {
     auto data = static_cast<T *>(storage->data());
     auto &rng = global_rng();

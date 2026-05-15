@@ -76,7 +76,7 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
 
 def profile_torch_matmul() -> ProfilingResults:
     """Profile the wall time of a single op."""
-    nt.manual_seed(42)
+    torch.random.manual_seed(42)
     random.seed(42)
     A_cpu, B_cpu, A_cuda, B_cuda = (
         torch.rand(500, 500),

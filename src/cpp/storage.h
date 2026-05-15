@@ -13,7 +13,6 @@
 #include "cuda.h"
 #include "dtype.h"
 
-
 [[noreturn]] inline void nt_unreachable() {
 #if defined(_MSC_VER) && !defined(__clang__)
   __assume(false);
@@ -46,10 +45,8 @@ inline Buffer make_buffer(size_t nbytes, Device device) {
   void *p = nullptr;
   if (device == Device::Cuda) {
     cudaMalloc(&p, nbytes);
-    cudaMemset(p, 0, nbytes);
   } else {
     p = ::operator new(nbytes);
-    std::memset(p, 0, nbytes);
   }
 
   return Buffer(p, BufDeleter{device});
