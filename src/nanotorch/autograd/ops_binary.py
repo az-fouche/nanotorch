@@ -6,7 +6,7 @@ from typing import Callable
 from nanotorch import _C  # type: ignore[missing-import]
 from nanotorch._data_type import promote_dtypes
 from nanotorch._indexing import broadcast_shapes
-from nanotorch.core import Tensor, TensorShape
+from nanotorch.core import Tensor, TensorShape, sizeof
 
 from . import ops_spec as sp
 from .function import Function
@@ -53,6 +53,12 @@ class AddOp(Function):
     def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
         return math.prod(broadcast_shapes(x1.shape, x2.shape))
 
+    @classmethod
+    def mem_bytes(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        shape = broadcast_shapes(x1.shape, x2.shape)
+        dtype = promote_dtypes(x1.dtype, x2.dtype)
+        return 3 * math.prod(shape) * sizeof(dtype)
+
 
 class SubOp(Function):
     """Subtract two tensors component-wise with broadcast.
@@ -97,6 +103,12 @@ class SubOp(Function):
     def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
         return math.prod(broadcast_shapes(x1.shape, x2.shape))
 
+    @classmethod
+    def mem_bytes(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        shape = broadcast_shapes(x1.shape, x2.shape)
+        dtype = promote_dtypes(x1.dtype, x2.dtype)
+        return 3 * math.prod(shape) * sizeof(dtype)
+
 
 class MulOp(Function):
     """Multiply two tensors component-wise with broadcast.
@@ -140,6 +152,12 @@ class MulOp(Function):
     @classmethod
     def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
         return math.prod(broadcast_shapes(x1.shape, x2.shape))
+
+    @classmethod
+    def mem_bytes(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        shape = broadcast_shapes(x1.shape, x2.shape)
+        dtype = promote_dtypes(x1.dtype, x2.dtype)
+        return 3 * math.prod(shape) * sizeof(dtype)
 
 
 class TrueDivOp(Function):
@@ -186,6 +204,12 @@ class TrueDivOp(Function):
     @classmethod
     def flops(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
         return math.prod(broadcast_shapes(x1.shape, x2.shape))
+
+    @classmethod
+    def mem_bytes(cls, x1: Tensor, x2: Tensor, _: Tensor | None = None) -> int:
+        shape = broadcast_shapes(x1.shape, x2.shape)
+        dtype = promote_dtypes(x1.dtype, x2.dtype)
+        return 3 * math.prod(shape) * sizeof(dtype)
 
 
 class MatmulOp(Function):
@@ -247,6 +271,13 @@ class MatmulOp(Function):
         shape1, shape2, _ = _matmul_broadcast(x1.shape, x2.shape)
         B, M, N, K = math.prod(shape1[:-2]), shape1[-2], shape2[-1], shape1[-1]
         return 2 * B * M * N * K
+
+    @classmethod
+    def mem_bytes(cls, x1: Tensor, x2: Tensor) -> int:
+        shape1, shape2, _ = _matmul_broadcast(x1.shape, x2.shape)
+        B, M, N, K = math.prod(shape1[:-2]), shape1[-2], shape2[-1], shape1[-1]
+        dtype = promote_dtypes(x1.dtype, x2.dtype)
+        return B * (M * K + K * N + M * N) * sizeof(dtype)
 
 
 def _binary_kernel_op(

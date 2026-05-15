@@ -93,6 +93,7 @@ def gen_random_input_for(
     max_ndim: int,
     min_size: int,
     max_size: int,
+    stride: bool,
 ) -> list[TensorLike]:
     """Generate a valid op input based on the spec."""
     inputs = []
@@ -101,7 +102,7 @@ def gen_random_input_for(
         if isinstance(domain, (Bool, Real)):
             inputs.append(
                 _gen_float_like_input(
-                    input_, inputs, min_ndim, max_ndim, min_size, max_size
+                    input_, inputs, min_ndim, max_ndim, min_size, max_size, stride
                 )
             )
         else:
@@ -116,6 +117,7 @@ def _gen_float_like_input(
     max_ndim: int,
     min_size: int,
     max_size: int,
+    stride: bool,
 ) -> TensorLike:
     """Generate a numeric tensor input based on the spec."""
     if input_.kind == "scalar":
@@ -127,14 +129,20 @@ def _gen_float_like_input(
     elif isinstance(input_.shape, BroadcastableTo):
         ref = inputs[input_.shape.ref]
         assert isinstance(ref, Tensor)
-        ndim = random.randint(0, ref.ndim + 1)
-        suffix = ref.shape[ref.ndim - ndim :]
-        shape = [1 if random.random() < 0.5 else ax for ax in suffix]
+        if not stride:
+            shape = ref.shape
+        else:
+            ndim = random.randint(0, ref.ndim + 1)
+            suffix = ref.shape[ref.ndim - ndim :]
+            shape = [1 if random.random() < 0.5 else ax for ax in suffix]
     elif isinstance(input_.shape, MatmulBroadcast):
         ref = inputs[input_.shape.ref]
         assert isinstance(ref, Tensor)
-        shape = [1 if random.random() < 0.5 else ax for ax in ref.shape[:-2]]
-        shape += [ref.shape[-1], random.randint(min_size, max_size)]
+        if not stride:
+            shape = ref.shape
+        else:
+            shape = [1 if random.random() < 0.5 else ax for ax in ref.shape[:-2]]
+            shape += [ref.shape[-1], random.randint(min_size, max_size)]
     else:
         raise AssertionError(f"Unhandled shape spec: {input_.shape}")
     if isinstance(shape, int):

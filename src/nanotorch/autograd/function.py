@@ -86,3 +86,8 @@ class Function:
     def flops(cls, *args: Any, **kwargs: Any) -> int:
         """Returns the number of FLOPs for the computation of the input."""
         return 0  # Default for metadata ops
+
+    @classmethod
+    def mem_bytes(cls, *args: Any, **kwargs: Any) -> int:
+        """Returns the number of mem bytes for the computation of the input."""
+        return 0  # Default for metadata ops

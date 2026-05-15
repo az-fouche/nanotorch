@@ -34,29 +34,29 @@ $ python scripts\profile_ops.py
 
 It runs a pass on all the autograd operations both on CPU and GPU and measures the FLOPS throughput for each kernel -- note that it includes some python overhead as well so that's not 1:1 comparable to pure C++ profiling. Here is the current state of the library, measured with a consumer-grade GPU (RTX 5080). 
 
-For fun, I also added a comparison to the theoretical peak FLOPS on this device (`fp32`). As expected, raw kernel launch without fusion is severely memory-bound! But I'll update this table as I optimize each kernel, to see where it lands (and to underline how strong cuBLAS engineers are). 
+For fun, I also added a comparison to the theoretical peak FLOPS and memory bandwidth on this device (`fp32`). As expected, raw kernel launch without fusion is severely memory-bound! But I'll update this table as I optimize each kernel, to see where it lands (and to underline how strong cuBLAS engineers are). 
 
 ```
-op            cpu (FLOPS) cuda (FLOPS)      speedup        %peak
-----------------------------------------------------------------
-addop             203.49M        1.52G         7.5x        0.00%
-expop             587.21M       89.10G       151.7x        0.16%
-logop             505.73M       92.41G       182.7x        0.17%
-matmul-torch      854.66G       38.08T        44.6x       68.00%
-matmulop            2.46G       19.30T      7830.8x       34.46%
-maxop             202.00M      115.16G       570.1x        0.21%
-meanop            212.33M       71.48G       336.6x        0.13%
-minop             202.87M      113.43G       559.1x        0.20%
-mulop             203.05M        1.52G         7.5x        0.00%
-negop              10.29G       97.39G         9.5x        0.17%
-powop             204.04M       86.92G       426.0x        0.16%
-reluop             10.92G       96.27G         8.8x        0.17%
-sigmoidop          88.38M       91.94G      1040.2x        0.16%
-sqrtop              5.97G       90.86G        15.2x        0.16%
-subop             206.92M        1.52G         7.4x        0.00%
-sumop             223.03M      121.17G       543.3x        0.22%
-tanhop            499.05M       95.30G       191.0x        0.17%
-truedivop         206.20M        1.52G         7.4x        0.00%
+op            cpu (FLOPS) cuda (FLOPS)   %peak(flops)   cuda (mem)   %peak(mem)
+-------------------------------------------------------------------------------
+addop               1.36G       68.04G         0.12%      816.53G        91.13%
+expop             470.83M       99.45G         0.18%      795.56G        88.79%
+logop             434.14M       79.23G         0.14%      633.85G        70.74%
+matmul-torch      887.00G       37.74T        67.39%       37.74G         4.21%
+matmulop            2.43G       16.54T        29.53%       24.80G         2.77%
+maxop             261.42M       97.11G         0.17%      388.44G        43.35%
+meanop            272.21M       95.80G         0.17%      383.21G        42.77%
+minop             271.12M      103.42G         0.18%      413.66G        46.17%
+mulop               1.27G       64.85G         0.12%      778.19G        86.85%
+negop               1.27G       79.08G         0.14%      632.62G        70.60%
+powop             168.53M       80.79G         0.14%      646.32G        72.13%
+reluop              1.26G       73.68G         0.13%      589.46G        65.79%
+sigmoidop          83.08M       79.00G         0.14%      632.02G        70.54%
+sqrtop              1.34G       66.24G         0.12%      529.95G        59.15%
+subop               1.29G       52.91G         0.09%      634.90G        70.86%
+sumop             273.56M       80.66G         0.14%      322.66G        36.01%
+tanhop            416.44M       83.82G         0.15%      670.57G        74.84%
+truedivop           1.32G       53.71G         0.10%      644.51G        71.93%
 ```
 
 ## Generative AI stance

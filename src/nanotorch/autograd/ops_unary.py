@@ -2,7 +2,7 @@
 
 from nanotorch import _C  # type: ignore[missing-import]
 from nanotorch._data_type import Dtype, promote_dtypes
-from nanotorch.core import Tensor
+from nanotorch.core import Tensor, sizeof
 
 from . import ops_spec as sp
 from .function import Function
@@ -35,6 +35,10 @@ class NegOp(Function):
     @classmethod
     def flops(cls, x: Tensor) -> int:
         return x.numel
+
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
 
 
 class ExpOp(Function):
@@ -69,6 +73,10 @@ class ExpOp(Function):
     def flops(cls, x: Tensor) -> int:
         return x.numel
 
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
+
 
 class LogOp(Function):
     """Logarithmize (Napierian) all tensor coefficients.
@@ -100,6 +108,10 @@ class LogOp(Function):
     @classmethod
     def flops(cls, x: Tensor) -> int:
         return x.numel
+
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
 
 
 class SqrtOp(Function):
@@ -135,6 +147,10 @@ class SqrtOp(Function):
     def flops(cls, x: Tensor) -> int:
         return x.numel
 
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
+
 
 class TanhOp(Function):
     """Tanh of all tensor coefficients.
@@ -169,6 +185,10 @@ class TanhOp(Function):
     def flops(cls, x: Tensor) -> int:
         return x.numel
 
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
+
 
 class SigmoidOp(Function):
     """Sigmoid of all tensor coefficients.
@@ -202,6 +222,10 @@ class SigmoidOp(Function):
     @classmethod
     def flops(cls, x: Tensor) -> int:
         return x.numel
+
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
 
 
 class PowOp(Function):
@@ -245,6 +269,10 @@ class PowOp(Function):
     def flops(cls, x: Tensor, exponent: Tensor) -> int:
         return x.numel
 
+    @classmethod
+    def mem_bytes(cls, x: Tensor, exponent: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)
+
 
 class ReluOp(Function):
     """Rectified linear unit."""
@@ -263,3 +291,7 @@ class ReluOp(Function):
     @classmethod
     def flops(cls, x: Tensor) -> int:
         return x.numel
+
+    @classmethod
+    def mem_bytes(cls, x: Tensor) -> int:
+        return 2 * x.numel * sizeof(x.dtype)

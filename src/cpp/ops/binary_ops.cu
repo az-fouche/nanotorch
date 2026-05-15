@@ -29,12 +29,35 @@ __global__ void _binary_kernel(const T *ptr_in1, const T *ptr_in2,
   ptr_out[i] = static_cast<O>(op(ptr_in1[indexer_1(i)], ptr_in2[indexer_2(i)]));
 }
 
+template <class Op>
+__global__ void _binary_kernel_contig_f4(const float4 *a, const float4 *b,
+                                         float4 *out, py::ssize_t n4, Op op) {
+  auto i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n4)
+    return;
+  float4 va = a[i], vb = b[i];
+  out[i] = make_float4(op(va.x, vb.x), op(va.y, vb.y), op(va.z, vb.z),
+                       op(va.w, vb.w));
+}
+
 template <class T, class O, class Op, class Idx1, class Idx2>
 std::shared_ptr<Storage>
 _cuda_binary_op_generic(const TensorView &x1, const TensorView &x2, Op op,
                         Dtype out_dtype, Idx1 indexer_1, Idx2 indexer_2) {
   auto n = numel_from_shape(x1.shape);
   auto storage_out = Storage::allocate(n, out_dtype, Device::Cuda);
+  if constexpr (std::is_same_v<T, float> && std::is_same_v<O, float>) {
+    // Ideal case (fp4 contig path)
+    if (is_contiguous(x1) && is_contiguous(x2) && n % 4 == 0 &&
+        x1.offset % 4 == 0 && x2.offset % 4 == 0) {
+      launch_1d(n / 4, _binary_kernel_contig_f4<Op>,
+                as_f4(x1.storage->data(), x1.offset),
+                as_f4(x2.storage->data(), x2.offset),
+                as_f4(storage_out->data(), 0), n / 4, op);
+      return storage_out;
+    }
+  }
+  // Slow fallback
   launch_1d(n, _binary_kernel<T, O, Op, Idx1, Idx2>,
             static_cast<const T *>(x1.storage->data()),
             static_cast<const T *>(x2.storage->data()), indexer_1, indexer_2,

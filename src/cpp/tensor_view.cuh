@@ -5,7 +5,7 @@
 
 #include "storage.h"
 
-inline constexpr int NT_MAX_DIMS = 32;
+inline constexpr int NT_MAX_DIMS = 8;
 
 struct TensorView { // For host-side
   std::shared_ptr<Storage> storage;

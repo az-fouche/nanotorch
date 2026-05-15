@@ -32,6 +32,18 @@ if TYPE_CHECKING:
 MAX_TENSOR_LEVEL = 32
 
 
+def sizeof(dtype: Dtype) -> int:
+    """Get the number of bytes used by a dtype."""
+    match dtype:
+        case Dtype.Bool:
+            return 1
+        case Dtype.Float32 | Dtype.Int32:
+            return 4
+        case Dtype.Float64 | Dtype.Int64:
+            return 8
+    raise TypeError(f"Unknown dtype: {dtype}")
+
+
 class Tensor:
     """Base tensor class.
 

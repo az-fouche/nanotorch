@@ -16,7 +16,8 @@ from nanotorch.autograd.ops_spec import gen_random_input_for
 
 N_CALLS = 100
 
-RTX_5080_FP32_PEAK = 56e12  # TFLOPS
+RTX_5080_FP32_PEAK = 56e12
+RTX_5080_BW_PEAK = 896e9
 
 CUDA_AVAILABLE = nt.cuda.is_available()
 
@@ -33,6 +34,7 @@ class ProfilingResults:
     op_name: str
     cpu_flops: float
     cuda_flops: float
+    cuda_mem: float
 
 
 def profile_op_cpu(op: type[ag.Function]) -> float | None:
@@ -41,7 +43,7 @@ def profile_op_cpu(op: type[ag.Function]) -> float | None:
     random.seed(42)
     size = CPU_SIZE if op is not ag.MatmulOp else CPU_SIZE_MATMUL
     inputs = gen_random_input_for(
-        op.op_spec, min_ndim=2, max_ndim=2, min_size=size, max_size=size
+        op.op_spec, min_ndim=2, max_ndim=2, min_size=size, max_size=size, stride=False
     )
     total_t = 0
     flops = op.flops(*inputs)  # type: ignore
@@ -56,20 +58,26 @@ def profile_op_cpu(op: type[ag.Function]) -> float | None:
     return flops * (N_CALLS - 2) / total_t
 
 
-def profile_op_cuda(op: type[ag.Function]) -> float:
-    """Profile the flops of a single op on CUDA."""
+def profile_op_cuda(op: type[ag.Function]) -> tuple[float, float]:
+    """Profile the flops + mem bw of a single op on CUDA."""
     nt.manual_seed(42)
     random.seed(42)
     size = CUDA_SIZE if op is not ag.MatmulOp else CUDA_SIZE_MATMUL
     inputs = [
         x.to("cuda") if isinstance(x, Tensor) else x
         for x in gen_random_input_for(
-            op.op_spec, min_ndim=2, max_ndim=2, min_size=size, max_size=size
+            op.op_spec,
+            min_ndim=2,
+            max_ndim=2,
+            min_size=size,
+            max_size=size,
+            stride=False,
         )
     ]
     flops = op.flops(*inputs)  # type: ignore
+    mem = op.mem_bytes(*inputs)  # type: ignore
     if flops == 0:
-        return 0.0
+        return 0.0, 0.0
     total_t = 0
     for i in range(N_CALLS):
         t0 = time.perf_counter()
@@ -78,7 +86,7 @@ def profile_op_cuda(op: type[ag.Function]) -> float:
             continue
         nt.cuda.sync()
         total_t += time.perf_counter() - t0
-    return flops * (N_CALLS - 2) / total_t
+    return flops * (N_CALLS - 2) / total_t, mem * (N_CALLS - 2) / total_t
 
 
 def profile_torch_matmul() -> ProfilingResults:
@@ -93,6 +101,7 @@ def profile_torch_matmul() -> ProfilingResults:
     )
     flops_cpu = ag.MatmulOp.flops(A_cpu, B_cpu)  # type: ignore
     flops_cuda = ag.MatmulOp.flops(A_cuda, B_cuda)  # type: ignore
+    mem_cuda = 12 * 6000 * 6000
 
     total_t_cpu, total_t_cuda = 0, 0
     for i in range(N_CALLS):
@@ -111,6 +120,7 @@ def profile_torch_matmul() -> ProfilingResults:
         op_name="matmul-torch",
         cpu_flops=flops_cpu * (N_CALLS - 2) / total_t_cpu,
         cuda_flops=flops_cuda * (N_CALLS - 2) / total_t_cuda,
+        cuda_mem=mem_cuda * (N_CALLS - 2) / total_t_cuda,
     )
 
 
@@ -123,7 +133,7 @@ def should_run(op_name: str, filter: str | None, regex: bool):
     return re.search(filter, op_name) is not None
 
 
-def fmt_flops(flops: float) -> str:
+def fmt_number(flops: float) -> str:
     """Human-readable flops."""
     if flops > 1e12:
         return f"{flops / 1e12:.2f}T"
@@ -146,7 +156,7 @@ def main():
     )
     parser.add_argument("-E", action="store_true", help="Enable regex filtering.")
     args = parser.parse_args()
-    results = []
+    results: list[ProfilingResults] = []
     pbar = tqdm.tqdm(ag.ALL_OPS_, ncols=80)
     for op in pbar:
         op_name = op.__name__.lower()
@@ -159,28 +169,36 @@ def main():
                 continue
             if CUDA_AVAILABLE:
                 pbar.set_description(f"Profiling {op_name} (cuda)")
-                cuda_flops = profile_op_cuda(op)
+                cuda_flops, cuda_mem = profile_op_cuda(op)
             else:
-                cuda_flops = 0.0
+                cuda_flops, cuda_mem = 0.0, 0.0
         results.append(
             ProfilingResults(
-                op_name=op_name, cpu_flops=cpu_flops, cuda_flops=cuda_flops
+                op_name=op_name,
+                cpu_flops=cpu_flops,
+                cuda_flops=cuda_flops,
+                cuda_mem=cuda_mem,
             )
         )
     results.append(profile_torch_matmul())
 
     results = sorted(results, key=lambda r: r.op_name)
 
-    hdr = f"{'op':<12} {'cpu (FLOPS)':>12} {'cuda (FLOPS)':>12} {'speedup':>12} {'%peak':>12}"
+    hdr = (
+        f"{'op':<12} {'cpu (FLOPS)':>12} {'cuda (FLOPS)':>12} "
+        f"{'%peak(flops)':>14} {'cuda (mem)':>12} {'%peak(mem)':>12}"
+    )
     print(hdr)
     print("-" * len(hdr))
     for r in results:
-        sp = r.cuda_flops / r.cpu_flops if r.cpu_flops > 0 else float("inf")
+        cuda_flops_pct = r.cuda_flops / RTX_5080_FP32_PEAK * 100
+        cuda_mem_pct = r.cuda_mem / RTX_5080_BW_PEAK * 100
         print(
-            f"{r.op_name:<12} {fmt_flops(r.cpu_flops):>12} "
-            f"{fmt_flops(r.cuda_flops):>12} "
-            f"{sp:>11.1f}x"
-            f"{r.cuda_flops / RTX_5080_FP32_PEAK * 100:>12.2f}%"
+            f"{r.op_name:<12} {fmt_number(r.cpu_flops):>12} "
+            f"{fmt_number(r.cuda_flops):>12} "
+            f"{cuda_flops_pct:>12.2f}% "
+            f"{fmt_number(r.cuda_mem):>12} "
+            f"{cuda_mem_pct:>12.2f}%"
         )
 
 

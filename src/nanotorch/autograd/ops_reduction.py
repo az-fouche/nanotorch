@@ -5,7 +5,7 @@ import math
 from nanotorch import _C  # type: ignore[missing-import]
 from nanotorch._data_type import Dtype
 from nanotorch._indexing import TensorShape
-from nanotorch.core import Tensor
+from nanotorch.core import Tensor, sizeof
 
 from . import ops_spec as sp
 from .function import Function
@@ -77,6 +77,10 @@ class SumOp(Function):
     def flops(cls, x: Tensor, *args, **kwargs) -> int:
         return x.numel
 
+    @classmethod
+    def mem_bytes(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel * sizeof(x.dtype)
+
 
 class MeanOp(Function):
     """Averages the tensor elements along one or more axes.
@@ -136,6 +140,10 @@ class MeanOp(Function):
     @classmethod
     def flops(cls, x: Tensor, *args, **kwargs) -> int:
         return x.numel  # generally numel_out << numel_in so ignoring it
+
+    @classmethod
+    def mem_bytes(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel * sizeof(x.dtype)
 
 
 class MaxOp(Function):
@@ -207,6 +215,10 @@ class MaxOp(Function):
     def flops(cls, x: Tensor, *args, **kwargs) -> int:
         return x.numel
 
+    @classmethod
+    def mem_bytes(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel * sizeof(x.dtype)
+
 
 class MinOp(Function):
     """Computes the min along one or more axes.
@@ -276,3 +288,7 @@ class MinOp(Function):
     @classmethod
     def flops(cls, x: Tensor, *args, **kwargs) -> int:
         return x.numel
+
+    @classmethod
+    def mem_bytes(cls, x: Tensor, *args, **kwargs) -> int:
+        return x.numel * sizeof(x.dtype)

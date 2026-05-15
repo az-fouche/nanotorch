@@ -165,7 +165,7 @@ def test_ops_flops(op: type[ag.Function]):
     nt.manual_seed(42)
     random.seed(42)
     inputs = sp.gen_random_input_for(
-        op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8
+        op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8, stride=True
     )
     assert op.flops(*inputs) >= 0
 
@@ -178,7 +178,7 @@ def test_ops_specs_fast(op: type[ag.Function]):
     nt.manual_seed(42)
     random.seed(42)
     inputs = sp.gen_random_input_for(
-        op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8
+        op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8, stride=True
     )
     tensor_in = [
         x.to(nt.float64) if x.dtype == nt.float32 else x
@@ -196,7 +196,7 @@ def test_ops_specs_extensive(op: type[ag.Function]):
     random.seed(42)
     for _ in range(100):
         inputs = sp.gen_random_input_for(
-            op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8
+            op.op_spec, min_ndim=0, max_ndim=5, min_size=1, max_size=8, stride=True
         )
         tensor_in = [
             x.to(nt.float64) if x.dtype == nt.float32 else x
