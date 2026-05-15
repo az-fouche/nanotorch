@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cstdint>
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <variant>
@@ -10,46 +8,26 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "cuda.h"
+#include "allocator.h"
 #include "dtype.h"
-
-[[noreturn]] inline void nt_unreachable() {
-#if defined(_MSC_VER) && !defined(__clang__)
-  __assume(false);
-#elif defined(__GNUC__) || defined(__clang__)
-  __builtin_unreachable();
-#else
-  std::abort();
-#endif
-}
-#define NT_UNREACHABLE() nt_unreachable()
+#include "unreachable.h"
 
 namespace py = pybind11;
 
-enum class Device : uint8_t { Cpu, Cuda };
-
 // Device-agnostic memory pointer handling cleanup
 struct BufDeleter {
+  size_t nbytes;
   Device device;
   void operator()(void *p) const noexcept {
     if (!p)
       return;
-    if (device == Device::Cuda)
-      cudaFree(p);
-    else
-      ::operator delete(p);
+    Allocator::for_device(device).free(p, nbytes);
   }
 };
 using Buffer = std::unique_ptr<void, BufDeleter>;
 inline Buffer make_buffer(size_t nbytes, Device device) {
-  void *p = nullptr;
-  if (device == Device::Cuda) {
-    cudaMalloc(&p, nbytes);
-  } else {
-    p = ::operator new(nbytes);
-  }
-
-  return Buffer(p, BufDeleter{device});
+  return Buffer(Allocator::for_device(device).alloc(nbytes),
+                BufDeleter{nbytes, device});
 }
 
 // 1D data container for tensors

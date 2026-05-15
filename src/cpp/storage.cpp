@@ -1,7 +1,6 @@
 #include "storage.h"
 
 // Storage
-
 Storage::Storage(py::ssize_t n, Dtype dtype, Device device)
     : buffer_(make_buffer(n * dtype_itemsize(dtype), device)), dtype_(dtype),
       n_(n) {}
