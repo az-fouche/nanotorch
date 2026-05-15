@@ -136,11 +136,12 @@ _generic_reduction_cuda(const TensorView &x, Dtype dtype,
   auto n_partials =
       std::min((numel_drop + BLOCK_SIZE - 1) / BLOCK_SIZE, MAX_PARTIALS);
   auto scratch_size = numel_keep * n_partials;
-  MatItem<O> *buf_a, *buf_b, *src, *dst;
-  NT_CUDA_CHECK(cudaMalloc(&buf_a, sizeof(MatItem<O>) * scratch_size));
-  NT_CUDA_CHECK(cudaMalloc(&buf_b, sizeof(MatItem<O>) * scratch_size));
-  src = buf_a;
-  dst = buf_b;
+
+  auto &alloc = Allocator::for_device(Device::Cuda);
+  auto nbytes = sizeof(MatItem<O>) * scratch_size;
+  auto *buf_a = static_cast<MatItem<O> *>(alloc.alloc(nbytes));
+  auto *buf_b = static_cast<MatItem<O> *>(alloc.alloc(nbytes));
+  MatItem<O> *src = buf_a, *dst = buf_b;
 
   // Iterative BLOCK_SIZE reductions
   bool is_first = true;
@@ -173,8 +174,8 @@ _generic_reduction_cuda(const TensorView &x, Dtype dtype,
   auto ptr_out = static_cast<OutT *>(storage_out->data());
   launch_1d(numel_keep, _extract_kernel<O, OutT, Op>, src, ptr_out, numel_keep);
 
-  NT_CUDA_CHECK(cudaFree(buf_a));
-  NT_CUDA_CHECK(cudaFree(buf_b));
+  alloc.free(buf_a, nbytes);
+  alloc.free(buf_b, nbytes);
 
   return storage_out;
 }
