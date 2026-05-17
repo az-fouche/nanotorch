@@ -34,7 +34,7 @@ $ python scripts\profile_ops.py
 
 It runs a pass on all the autograd operations both on CPU and GPU and measures the FLOPS throughput for each kernel -- note that it includes some python overhead as well so that's not 1:1 comparable to pure C++ profiling. Here is the current state of the library, measured with a consumer-grade GPU (RTX 5080). 
 
-For fun, I also added a comparison to the theoretical peak FLOPS and memory bandwidth on this device (`fp32`). As expected, raw kernel launch without fusion is severely memory-bound! But I'll update this table as I optimize each kernel, to see where it lands (and to underline how strong cuBLAS engineers are). 
+I also added a relative comparison to the theoretical peak FLOPS and memory bandwidth on this device (`fp32`). As expected, raw kernel launch without fusion is severely memory-bound! But I'll update this table as I optimize each kernel, to see where it lands. Keep in mind that libraries like cuBLAS endow dozens of kernel versions for each operation, with advanced heuristics to choose the most efficient one in every situation!
 
 ```
 op            cpu (FLOPS) cuda (FLOPS)   %peak(flops)   cuda (mem)   %peak(mem)
